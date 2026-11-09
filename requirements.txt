@@ -10,3 +10,8 @@ spacy>=3.5.0
 
 # Test runner
 pytest>=7.0.0
+
+# Financial Hallucination Detector & AI Research Agent
+streamlit>=1.30.0
+pandas>=2.0.0
+yfinance>=0.2.30

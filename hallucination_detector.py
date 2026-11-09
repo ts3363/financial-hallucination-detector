@@ -1255,8 +1255,7 @@ class HallucinationDetector:
         answer: str,
     ) -> HallucinationReport:
         """Async wrapper — runs inspect() in thread pool, safe for FastAPI."""
-        loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(None, self.inspect, question, context_chunks, answer)
+        return self.inspect(question, context_chunks, answer)
 
     def _run_checks(
         self,

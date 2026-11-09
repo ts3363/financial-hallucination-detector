@@ -280,17 +280,103 @@ If you need sub-10ms end-to-end, the regex NER fallback is a one-line config cha
 
 ---
 
+---
+
+## Financial Features: Financial Hallucination Detector & AI Research Agent
+
+LLMs can confidently state incorrect financial figures, revenue numbers, and margins:
+> **User:** *"What was TCS's revenue in Q4?"*  
+> **LLM:** *"TCS reported ₹65,000 crore."*  
+> **Audited Truth:** *"Consolidated revenue stood at ₹61,237 crore."*
+
+The financial extension (`financial/`) extracts quantitative claims, cross-verifies them against official regulatory filings (SEC, NSE/BSE) and live market feeds, computes claim-level hallucination probabilities, and provides in-place self-healing with verified footnote citations.
+
+### Financial Detection Pipeline
+
+```
+             LLM Answer
+                 │
+          Extract Claims  (Entities, Metrics, Fiscal Periods, Currency & Scales)
+                 │
+       ┌─────────┴─────────┐
+       ▼                   ▼
+  Financial Reports    Market Data (yfinance / fundamental cache)
+       │                   │
+       └─────────┬─────────┘
+                 ▼
+          Claim Verification (Exact match / Rounding tolerance / Currency conversion)
+                 │
+       ┌─────────┼─────────┐
+       ▼         ▼         ▼
+   Supported  Contradicted  Unknown
+       │         │         │
+       └─────────┼─────────┘
+                 ▼
+          Hallucination Score & Self-Healed Answer
+```
+
+### AI Financial Research Agent (Mini Bloomberg)
+
+Autonomously analyzes companies across 4 core scorecards:
+- **Financial Health** (0-100) - Debt/Equity, current ratio, cash generation
+- **Growth** (0-100) - YoY revenue, deal book TCV, earnings momentum
+- **Profitability** (0-100) - Operating margin, gross margin, return on equity (ROE)
+- **Risk** (0-100) - Beta volatility, valuation stretch, concentration
+
+Features included:
+- **Multi-Company Coverage**: Full audited ground truth for 13 major Indian and global giants (TCS, INFOSYS, RELIANCE, HDFC, WIPRO, TATAMOTORS, APPLE, MICROSOFT, GOOGLE, NVIDIA, AMAZON, META, TESLA), plus dynamic parsing for any arbitrary company or ticker.
+- **Natural Language Financial Q&A**: Answers company valuation questions, cross-company peer comparisons, specific metric lookups, and financial concepts.
+- **Quantitative Forensics**: Piotroski 9-Point F-Score, Altman Z-Score solvency model, and Cash Conversion Ratio.
+- **Peer Benchmarking**: Cross-company margin and multiple ranking across 6 industry sectors.
+- **Temporal Growth Verifier**: Catches YoY vs QoQ basis slips and quarter-to-annual confabulations.
+- **Document & PDF Ingestion**: Dynamic regex & statement parser indexing uploaded filings directly into memory.
+- **Self-Audited Reports**: The agent passes its own synthesized reports through the FinancialHallucinationDetector to ensure 0% hallucination rate before delivery.
+
+### Quick Start (Financial Features)
+
+Run the console scenarios:
+`ash
+python demo_financial.py --scenario 1  # TCS Rs 65,000 Cr revenue hallucination
+python demo_financial.py --scenario all
+`
+
+Launch the interactive Streamlit Web Dashboard:
+`ash
+streamlit run financial/app.py
+`
+
+Run financial test suite (30 tests):
+`ash
+pytest test_financial.py -v
+`
+
 ## Project Structure
 
-```
+`
 hallucination-detector/
-├── hallucination_detector.py          # Full pipeline — detector, healer, scorer
-├── demo.py                            # Five runnable production scenarios
-├── test_hallucination_detector.py # 70 tests covering all failure modes
+├── hallucination_detector.py          # Core RAG detector, healer, quality scorer
+├── demo.py                            # Five general production scenarios
+├── test_hallucination_detector.py     # 70 unit and integration tests
+├── demo_financial.py                  # Financial demonstration scenarios
+├── test_financial.py                  # Financial test suite (30 unit & integration tests)
 ├── requirements.txt
-└── README.md
-```
-
+├── README.md
+└── financial/                         # Financial extension package
+    ├── __init__.py                    # Public API exports
+    ├── config.py                      # Financial tolerances, metrics, scale & currency mappings
+    ├── claim_extractor.py             # Financial regex & NLP claim extraction
+    ├── sample_data.py                 # Audited ground truth filings (13 pre-loaded companies)
+    ├── data_sources.py                # FinancialReportStore & MarketDataProvider (yfinance + cache)
+    ├── detector.py                    # FinancialHallucinationDetector
+    ├── healer.py                      # FinancialHealer (in-place patching & footnote citations)
+    ├── sentiment.py                   # FinSentimentAnalyzer (financial lexicon & transcript sentiment)
+    ├── forensics.py                   # Piotroski F-Score, Altman Z-Score & Cash Conversion Ratio
+    ├── peer_benchmark.py              # Sector peer comparison matrix & comparative claim auditor
+    ├── temporal_verifier.py           # Temporal YoY vs QoQ basis flip detector
+    ├── rag_indexer.py                 # Regulatory statement & PDF ingestion engine
+    ├── research_agent.py              # FinancialResearchAgent (mini Bloomberg analyst)
+    └── app.py                         # Interactive 5-tab Streamlit Web Dashboard
+`
 ---
 
 ## When to Use This
