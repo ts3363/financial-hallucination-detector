@@ -58,6 +58,11 @@ from .temporal_verifier import (
     TemporalGrowthVerifier,
     TemporalVerificationResult,
 )
+from .rag_knowledge_base import (
+    FinancialRAGEngine,
+    KnowledgeChunk,
+    FINANCIAL_KNOWLEDGE_CORPUS,
+)
 
 __all__ = [
     "ClaimStatus",
@@ -90,4 +95,7 @@ __all__ = [
     "ExtractedFilingMetric",
     "TemporalGrowthVerifier",
     "TemporalVerificationResult",
+    "FinancialRAGEngine",
+    "KnowledgeChunk",
+    "FINANCIAL_KNOWLEDGE_CORPUS",
 ]

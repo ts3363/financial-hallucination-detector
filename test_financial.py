@@ -419,3 +419,62 @@ class TestMultiCompanyCoverage:
             assert len(rep.market_metrics) > 0
 
 
+# ─────────────────────────────────────────────────────────────
+# 11. FINANCIAL RAG ENGINE TESTS
+# ─────────────────────────────────────────────────────────────
+
+class TestFinancialRAGEngine:
+
+    def test_rag_engine_initialization(self):
+        from financial import FinancialRAGEngine
+        rag = FinancialRAGEngine()
+        assert len(rag.chunks) >= 20
+        categories = rag.get_all_categories()
+        assert "Valuation" in categories
+        assert "Financial Health" in categories
+        assert "Investment Strategy" in categories
+
+    def test_rag_retrieval_pe_ratio(self):
+        from financial import FinancialRAGEngine
+        rag = FinancialRAGEngine()
+        retrieved = rag.retrieve("What is P/E ratio?", top_k=3)
+        assert len(retrieved) > 0
+        top_chunk, score = retrieved[0]
+        assert "P/E" in top_chunk.title or "Earnings" in top_chunk.title
+        assert score > 0.05
+
+    def test_rag_retrieval_piotroski(self):
+        from financial import FinancialRAGEngine
+        rag = FinancialRAGEngine()
+        retrieved = rag.retrieve("Explain Piotroski F-score and its 9 criteria", top_k=3)
+        assert len(retrieved) > 0
+        titles = [c.title for c, _ in retrieved]
+        assert any("Piotroski" in t for t in titles)
+
+    def test_rag_answer_grounding(self):
+        from financial import FinancialRAGEngine
+        rag = FinancialRAGEngine()
+        res = rag.answer_query("How does SIP and rupee cost averaging work?")
+        assert res["grounded"] is True
+        assert res["confidence"] > 0.7
+        assert len(res["sources"]) > 0
+        assert "SIP" in res["answer"] or "Averaging" in res["answer"] or "Systematic" in res["answer"]
+
+    def test_rag_custom_knowledge_addition(self):
+        from financial import FinancialRAGEngine, KnowledgeChunk
+        rag = FinancialRAGEngine()
+        initial_count = len(rag.chunks)
+        new_chunk = KnowledgeChunk(
+            chunk_id="test_pharma_01",
+            category="Sector Analysis",
+            title="Indian Pharmaceutical Sector Dynamics",
+            content="Indian pharma companies supply over 20% of global generic drugs with USFDA compliance.",
+            keywords=["pharma", "generic", "usfda", "drugs"]
+        )
+        rag.add_knowledge(new_chunk)
+        assert len(rag.chunks) == initial_count + 1
+        res = rag.retrieve("Tell me about Indian pharma and generics", top_k=3)
+        assert any("Pharmaceutical" in c.title for c, _ in res)
+
+
+
