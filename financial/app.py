@@ -31,6 +31,10 @@ from financial.data_sources import FinancialReportStore, MarketDataProvider
 from financial.forensics import ForensicAnalyzer
 from financial.peer_benchmark import PeerBenchmarkEngine
 from financial.rag_indexer import FinancialDocumentIndexer
+from financial.rag_knowledge_base import FinancialRAGEngine, KnowledgeChunk
+from financial.sentiment import FinSentimentAnalyzer
+from financial.claim_verification import FinancialClaimVerifier, DebertaNLIClassifier
+from financial.evidence_retrieval import FinancialEvidenceRetriever
 
 # ── Page Configuration ─────────────────────────────────────────
 st.set_page_config(
@@ -242,9 +246,12 @@ def get_engines(rel_tol: float, m_tol: float, live: bool):
     forensics = ForensicAnalyzer()
     peer_engine = PeerBenchmarkEngine()
     indexer = FinancialDocumentIndexer(report_store=store)
-    return detector, healer, agent, forensics, peer_engine, indexer, store
+    rag_engine = FinancialRAGEngine()
+    sentiment_analyzer = FinSentimentAnalyzer()
+    claim_verifier = FinancialClaimVerifier(report_store=store)
+    return detector, healer, agent, forensics, peer_engine, indexer, store, rag_engine, sentiment_analyzer, claim_verifier
 
-detector, healer, agent, forensics, peer_engine, indexer, store = get_engines(
+detector, healer, agent, forensics, peer_engine, indexer, store, rag_engine, sentiment_analyzer, claim_verifier = get_engines(
     relative_tolerance, margin_tolerance, enable_live_market
 )
 
@@ -410,13 +417,14 @@ st.markdown(
     "audit temporal basis slips & peer comparisons, and generate institutional research reports."
 )
 
-tab1, tab2, tab3, tab4, tab5 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
     "🔍 Hallucination Detector & Healer",
     "📊 AI Research Agent",
     "💬 Finance Chat Q&A",
     "⚖️ Peer Benchmarking",
     "🔬 Quantitative Forensics",
-    "📑 Document & PDF Ingestion"
+    "📑 Document & PDF Ingestion",
+    "🧪 Claim-Level NLI Audit"
 ])
 
 # ══════════════════════════════════════════════════════════════
@@ -1588,8 +1596,8 @@ with tab6:
             st.info("Text indexed into context chunks. No exact tabular statement line patterns matched.")
 
 
-# ── TAB 6: CLAIM-LEVEL NLI AUDIT ────────────────────────────
-with tab6:
+# ── TAB 7: CLAIM-LEVEL NLI AUDIT ────────────────────────────
+with tab7:
     st.subheader("Claim-level financial verification")
     st.caption(
         "Splits an LLM answer into claims, retrieves local financial evidence with TF-IDF, "
