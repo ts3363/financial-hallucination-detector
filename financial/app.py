@@ -123,67 +123,11 @@ enable_live_market = st.sidebar.checkbox(
     help="Query live market quotes if online; falls back to cached fundamentals."
 )
 
-st.sidebar.markdown("---")
-st.sidebar.subheader("📋 Preset Scenarios")
-preset = st.sidebar.selectbox(
-    "Load Scenario:",
-    [
-        "1. TCS Q4 Revenue Confabulation (Rs 65,000 Cr vs Rs 61,237 Cr)",
-        "2. TCS Margin & Dividend Misstatement",
-        "3. Apple Q4 Gross Margin & Revenue Drift",
-        "4. Nvidia Q4 Data Center Revenue Hallucination ($25B vs $18.4B)",
-        "5. Google Q4 Cloud Revenue & Profit Drift",
-        "6. Tesla Automotive Margin Fabrication (25% vs 17.2%)",
-        "7. HDFC Bank Net Profit Overstatement (Rs 22,000 Cr vs Rs 16,512 Cr)",
-        "8. Temporal Flip: YoY vs QoQ Basis Mix-up",
-        "9. Peer Ranking Contradiction (TCS vs Infosys)",
-        "10. Clean Grounded Answer (100% Verified)",
-    ]
-)
-
-# ── Glossary Sidebar ───────────────────────────────────────────
-st.sidebar.markdown("---")
-with st.sidebar.expander("📚 Financial Terms Glossary"):
-    glossary = {
-        "P/E Ratio": "Price-to-Earnings: Stock price divided by annual earnings per share. Higher = more expensive relative to earnings.",
-        "ROE": "Return on Equity: Net income divided by shareholder equity. Measures profitability per rupee/dollar of equity invested.",
-        "Operating Margin": "Operating profit as % of revenue. Excludes interest & taxes. Higher margin = more efficient operations.",
-        "Net Margin": "Net profit as % of revenue after ALL expenses including taxes. The bottom-line profitability measure.",
-        "Piotroski F-Score": "9-point checklist scoring profitability, leverage, and operating efficiency. Score 8-9 = strong; 0-2 = distressed.",
-        "Altman Z-Score": "Bankruptcy prediction model. Z > 2.99 = safe zone; 1.81–2.99 = grey zone; < 1.81 = distress zone.",
-        "Cash Conversion Ratio": "Operating Cash Flow / Net Profit. Ratio > 1.0 means earnings are backed by real cash.",
-        "Debt/Equity (D/E)": "Total debt divided by shareholder equity. High D/E = higher financial risk and leverage.",
-        "EBITDA": "Earnings Before Interest, Taxes, Depreciation & Amortization. Proxy for operating cash-flow generation.",
-        "EV/EBITDA": "Enterprise Value divided by EBITDA. Valuation multiple; lower = potentially cheaper than peers.",
-        "Dividend Yield": "Annual dividend per share / share price. Measures income return for investors.",
-        "Market Cap": "Total market value of a company = share price × number of shares outstanding.",
-        "YoY / QoQ": "Year-over-Year (same quarter last year) vs Quarter-over-Quarter (previous quarter). Mixing these is a common hallucination.",
-        "Free Cash Flow": "Cash from operations minus capital expenditure. 'Real' profit that can be returned to shareholders.",
-        "Hallucination": "When an AI fabricates or misquotes a financial figure not supported by audited filings or market data.",
-    }
-    for term, definition in glossary.items():
-        st.sidebar.markdown(f"**{term}**")
-        st.sidebar.caption(definition)
-        st.sidebar.markdown("---")
-
-# ── Watchlist Sidebar ──────────────────────────────────────────
-st.sidebar.markdown("---")
-st.sidebar.subheader("📌 My Watchlist")
+# ── Supported Universe of Companies ────────────────────────────
 ALL_COMPANIES = [
     "TCS", "INFOSYS", "RELIANCE", "HDFC", "WIPRO", "TATAMOTORS",
     "APPLE", "MICROSOFT", "GOOGLE", "NVIDIA", "AMAZON", "META", "TESLA"
 ]
-wl_add = st.sidebar.selectbox("Add to Watchlist:", ALL_COMPANIES, key="wl_add_sel")
-if st.sidebar.button("+ Add", key="wl_add_btn"):
-    if wl_add not in st.session_state["watchlist"]:
-        st.session_state["watchlist"].append(wl_add)
-        st.sidebar.success(f"{wl_add} added!")
-if st.session_state["watchlist"]:
-    chips_html = " ".join([f'<span class="watchlist-chip">{c}</span>' for c in st.session_state["watchlist"]])
-    st.sidebar.markdown(chips_html, unsafe_allow_html=True)
-    if st.sidebar.button("Clear Watchlist", key="wl_clear"):
-        st.session_state["watchlist"] = []
-        st.rerun()
 
 # ── Preset Texts ───────────────────────────────────────────────
 PRESETS = {
@@ -191,43 +135,69 @@ PRESETS = {
         "company": "TCS", "question": "What was TCS's revenue in Q4 FY24?",
         "answer": "TCS reported Rs 65,000 crore in revenue for Q4 FY24, showing accelerated growth across its cloud and enterprise software verticals."
     },
-    "2. TCS Margin & Dividend Misstatement": {
-        "company": "TCS", "question": "What were TCS's operating margins and final dividend in Q4?",
-        "answer": "For Q4, TCS achieved an operating margin of 29.5% and the board announced a final dividend of Rs 35 per share."
-    },
-    "3. Apple Q4 Gross Margin & Revenue Drift": {
-        "company": "APPLE", "question": "How did Apple perform in Q4 FY24?",
-        "answer": "Apple delivered quarterly revenue of $105.5 billion and reported a gross margin of 42.0% for the quarter."
-    },
-    "4. Nvidia Q4 Data Center Revenue Hallucination ($25B vs $18.4B)": {
-        "company": "NVIDIA", "question": "What was Nvidia's revenue and gross margin in Q4 FY24?",
-        "answer": "Nvidia delivered record Q4 revenue of $25.0 billion and reported a gross margin of 68.0% for the fourth quarter."
-    },
-    "5. Google Q4 Cloud Revenue & Profit Drift": {
-        "company": "GOOGLE", "question": "What were Google's Q4 operating margins and revenue?",
-        "answer": "Alphabet reported Q4 revenue of $92.5 billion with an operating margin of 34.0%."
-    },
-    "6. Tesla Automotive Margin Fabrication (25% vs 17.2%)": {
-        "company": "TESLA", "question": "What was Tesla's performance in Q4?",
-        "answer": "Tesla posted Q4 revenue of $28.5 billion and achieved an operating margin of 15.5%."
-    },
-    "7. HDFC Bank Net Profit Overstatement (Rs 22,000 Cr vs Rs 16,512 Cr)": {
+    "2. HDFC Bank Net Profit Overstatement (Rs 22,000 Cr vs Rs 16,512 Cr)": {
         "company": "HDFC", "question": "What was HDFC Bank's net profit in Q4 FY24?",
         "answer": "HDFC Bank reported quarterly net profit of Rs 22,000 crore following the parent merger."
     },
-    "8. Temporal Flip: YoY vs QoQ Basis Mix-up": {
-        "company": "TCS", "question": "How fast did TCS revenue grow in Q4?",
-        "answer": "TCS reported that its revenue grew 3.5% QoQ sequentially in the fourth quarter."
+    "3. Reliance Industries Q4 Revenue Drift (Rs 265,000 Cr vs Rs 240,715 Cr)": {
+        "company": "RELIANCE", "question": "What was Reliance's revenue and EBITDA in Q4 FY24?",
+        "answer": "Reliance Industries reported quarterly revenue of Rs 265,000 crore and EBITDA of Rs 48,000 crore in Q4 FY24."
     },
-    "9. Peer Ranking Contradiction (TCS vs Infosys)": {
-        "company": "TCS", "question": "How do TCS margins compare to Infosys?",
-        "answer": "TCS has a lower operating margin than Infosys in the recent financial year."
+    "4. Infosys Operating Margin Understatement (17.5% vs 20.1%)": {
+        "company": "INFOSYS", "question": "What was Infosys's revenue and operating margin in Q4 FY24?",
+        "answer": "Infosys reported revenue of Rs 37,923 crore but operating margin declined sharply to 17.5%."
     },
-    "10. Clean Grounded Answer (100% Verified)": {
+    "5. Apple Q4 Gross Margin & Revenue Drift ($105.5B vs $94.93B)": {
+        "company": "APPLE", "question": "How did Apple perform in Q4 FY24?",
+        "answer": "Apple delivered quarterly revenue of $105.5 billion and reported a gross margin of 42.0% for the quarter."
+    },
+    "6. Nvidia Q4 Data Center Revenue Hallucination ($25B vs $18.4B)": {
+        "company": "NVIDIA", "question": "What was Nvidia's revenue and gross margin in Q4 FY24?",
+        "answer": "Nvidia delivered record Q4 revenue of $25.0 billion and reported a gross margin of 68.0% for the fourth quarter."
+    },
+    "7. Google Q4 Cloud Revenue & Profit Drift ($92.5B vs $86.31B)": {
+        "company": "GOOGLE", "question": "What were Google's Q4 operating margins and revenue?",
+        "answer": "Alphabet reported Q4 revenue of $92.5 billion with an operating margin of 34.0%."
+    },
+    "8. Microsoft Q4 Cloud & Total Revenue Drift ($72B vs $64.73B)": {
+        "company": "MICROSOFT", "question": "What was Microsoft's revenue and net profit in Q4 FY24?",
+        "answer": "Microsoft reported Q4 FY24 revenue of $72.0 billion and net profit of $26.5 billion."
+    },
+    "9. Amazon Q4 Operating Income & Revenue Drift ($185B vs $169.96B)": {
+        "company": "AMAZON", "question": "What was Amazon's performance in Q4 FY24?",
+        "answer": "Amazon posted Q4 net sales of $185.0 billion and net profit of $14.5 billion."
+    },
+    "10. Meta Q4 Operating Margin Drift (48% vs 41.0%)": {
+        "company": "META", "question": "What was Meta's revenue and operating margin in Q4 FY24?",
+        "answer": "Meta Platforms delivered revenue of $44.5 billion and operating margin surged to 48.0%."
+    },
+    "11. Tesla Automotive Margin Fabrication (25% vs 17.2%)": {
+        "company": "TESLA", "question": "What was Tesla's performance in Q4?",
+        "answer": "Tesla posted Q4 revenue of $28.5 billion and achieved an operating margin of 15.5%."
+    },
+    "12. Wipro Q4 Revenue & Margin Drift (Rs 25,000 Cr vs Rs 22,208 Cr)": {
+        "company": "WIPRO", "question": "What was Wipro's revenue and margin in Q4 FY24?",
+        "answer": "Wipro reported consolidated revenue of Rs 25,000 crore and operating margin of 18.5%."
+    },
+    "13. Tata Motors Commercial & Passenger Revenue Confabulation": {
+        "company": "TATAMOTORS", "question": "What was Tata Motors's revenue and net profit in Q4 FY24?",
+        "answer": "Tata Motors posted consolidated Q4 revenue of Rs 1,35,000 crore and net profit of Rs 21,500 crore."
+    },
+    "14. Clean Grounded Answer (100% Verified TCS)": {
         "company": "TCS", "question": "Provide verified Q4 results for TCS.",
         "answer": "According to the company filings, TCS posted Q4 FY24 revenue from operations of Rs 61,237 crore with an operating margin of 26.0% and net profit of Rs 12,434 crore."
+    },
+    "15. Clean Grounded Answer (100% Verified HDFC)": {
+        "company": "HDFC", "question": "Provide verified Q4 results for HDFC Bank.",
+        "answer": "According to HDFC Bank Q4 FY24 Financial Statements (Page 2), HDFC reported consolidated revenue of ₹29,077 crore and net profit of ₹16,512 crore."
     }
 }
+st.sidebar.markdown("---")
+st.sidebar.subheader("📋 Preset Scenarios")
+preset = st.sidebar.selectbox(
+    "Load Scenario:",
+    list(PRESETS.keys())
+)
 selected_preset = PRESETS[preset]
 
 # ── Initialize Engines ─────────────────────────────────────────
@@ -438,6 +408,78 @@ with tab1:
         "filings (SEC, NSE/BSE) to detect and eliminate hallucinations."
     )
 
+    # ── Helper: Grounded RAG Generator for Tab 1 ──
+    def _generate_tab1_rag_response(q_text: str, comp_sel: str):
+        # Prioritize company selected by user, then question entity, then fallback
+        if comp_sel and comp_sel != "(Auto-Detect from Question)":
+            comp = comp_sel
+        else:
+            comp = agent.claim_extractor._detect_company(q_text) or "HDFC"
+        
+        q_lower = q_text.lower()
+        rev_rec = store.lookup_metric(comp, "revenue", "Q4")
+        net_rec = store.lookup_metric(comp, "net_profit", "Q4")
+        margin_rec = store.lookup_metric(comp, "operating_margin", "Q4") or store.lookup_metric(comp, "gross_margin", "Q4")
+        div_rec = store.lookup_metric(comp, "dividend", "Q4")
+        growth_rec = store.lookup_metric(comp, "revenue_growth", "Q4")
+        ebitda_rec = store.lookup_metric(comp, "ebitda", "Q4")
+        order_rec = store.lookup_metric(comp, "order_book", "Q4")
+
+        sources = []
+        if rev_rec: sources.append(rev_rec.source_document)
+        if net_rec and net_rec.source_document not in sources: sources.append(net_rec.source_document)
+        if margin_rec and margin_rec.source_document not in sources: sources.append(margin_rec.source_document)
+
+        # 1. Margin specific query
+        if "margin" in q_lower and margin_rec:
+            m_type = "operating margin" if "operating" in margin_rec.metric else "gross margin"
+            ans = f"According to {margin_rec.source_document} ({margin_rec.page_number}), {comp} achieved a {m_type} of {margin_rec.reported_str}."
+            if div_rec:
+                ans += f" The board announced a dividend of {div_rec.reported_str}."
+            return ans, comp, [margin_rec.source_document]
+        
+        # 2. Net profit / PAT specific query
+        elif ("profit" in q_lower or "net income" in q_lower or "pat" in q_lower) and net_rec and not any(w in q_lower for w in ["revenue", "performance"]):
+            ans = f"According to {net_rec.source_document} ({net_rec.page_number}), {comp} reported net profit of {net_rec.reported_str}."
+            if margin_rec:
+                m_type = "operating margin" if "operating" in margin_rec.metric else "gross margin"
+                ans += f" The {m_type} stood at {margin_rec.reported_str}."
+            return ans, comp, [net_rec.source_document]
+        
+        # 3. EBITDA query
+        elif "ebitda" in q_lower and ebitda_rec:
+            ans = f"According to {ebitda_rec.source_document} ({ebitda_rec.page_number}), {comp} reported EBITDA of {ebitda_rec.reported_str}."
+            if rev_rec:
+                ans += f" Revenue from operations was {rev_rec.reported_str}."
+            return ans, comp, [ebitda_rec.source_document]
+
+        # 4. Order book / Deal wins query
+        elif any(w in q_lower for w in ["order book", "backlog", "deal wins"]) and order_rec:
+            ans = f"According to {order_rec.source_document} ({order_rec.page_number}), {comp} recorded deal bookings of {order_rec.reported_str}."
+            return ans, comp, [order_rec.source_document]
+        
+        # 5. Peer comparison query
+        elif any(w in q_lower for w in ["compare", "vs", "versus"]):
+            rep = agent.analyze(q_text)
+            return rep.direct_answer, comp, rep.evidence_citations
+        
+        # 6. Default / Revenue & Comprehensive Performance overview
+        else:
+            parts = []
+            lead_src = rev_rec.source_document if rev_rec else (net_rec.source_document if net_rec else "audited filings")
+            lead_pg = rev_rec.page_number if rev_rec else (net_rec.page_number if net_rec else "Page 1")
+            if rev_rec:
+                parts.append(f"consolidated revenue from operations of {rev_rec.reported_str}")
+            if net_rec:
+                parts.append(f"net profit of {net_rec.reported_str}")
+            ans = f"According to {lead_src} ({lead_pg}), {comp} reported " + " and ".join(parts) + "."
+            if growth_rec:
+                ans += f" Revenue grew {growth_rec.reported_str}."
+            if margin_rec:
+                m_type = "operating margin" if "operating" in margin_rec.metric else "gross margin"
+                ans += f" {m_type.capitalize()} was {margin_rec.reported_str}."
+            return ans, comp, sources
+
     # ── Synchronize Presets & State with Session State ──
     if "last_preset_loaded" not in st.session_state:
         st.session_state["last_preset_loaded"] = None
@@ -451,15 +493,16 @@ with tab1:
 
     # ── Quick Finance Question Chips ──
     st.markdown("#### ⚡ Quick Finance Questions — Click to Test Instantly:")
-    qchips = st.columns(7)
+    qchips = st.columns(8)
     quick_samples = [
         ("TCS Revenue", "TCS", "What was TCS's revenue in Q4 FY24?"),
         ("HDFC Revenue", "HDFC", "What was HDFC's revenue in Q4 FY24?"),
         ("HDFC Net Profit", "HDFC", "What was HDFC Bank's net profit in Q4 FY24?"),
+        ("Reliance Q4", "RELIANCE", "What was Reliance's revenue and EBITDA in Q4 FY24?"),
+        ("Infosys Margin", "INFOSYS", "What was Infosys's revenue and operating margin in Q4 FY24?"),
         ("Apple Margin", "APPLE", "What was Apple's gross margin in Q4 FY24?"),
-        ("Nvidia Data Center", "NVIDIA", "What was Nvidia's revenue and gross margin in Q4 FY24?"),
-        ("Altman Z-Score", "TCS", "What is Altman Z-Score safe zone and how does it predict bankruptcy?"),
-        ("Piotroski F-Score", "TCS", "Explain Piotroski F-Score and its 9 criteria"),
+        ("Nvidia Q4", "NVIDIA", "What was Nvidia's revenue and gross margin in Q4 FY24?"),
+        ("Tesla Margin", "TESLA", "What was Tesla's performance in Q4?"),
     ]
     for qi, (label, comp_name, q_text) in enumerate(quick_samples):
         if qchips[qi].button(label, key=f"tab1_chip_{qi}", use_container_width=True):
@@ -475,15 +518,8 @@ with tab1:
             if matched_preset:
                 st.session_state["tab1_answer_input"] = matched_preset
             else:
-                # Pre-generate RAG answer
-                rev_r = store.lookup_metric(comp_name, "revenue", "Q4")
-                net_r = store.lookup_metric(comp_name, "net_profit", "Q4")
-                if "revenue" in q_text.lower() and rev_r:
-                    st.session_state["tab1_answer_input"] = f"According to {rev_r.source_document} ({rev_r.page_number}), {comp_name} reported consolidated revenue of {rev_r.reported_str}."
-                elif "profit" in q_text.lower() and net_r:
-                    st.session_state["tab1_answer_input"] = f"According to {net_r.source_document} ({net_r.page_number}), {comp_name} reported net profit of {net_r.reported_str}."
-                else:
-                    st.session_state["tab1_answer_input"] = f"Analyzing financial data for {comp_name}..."
+                grounded_txt, _, _ = _generate_tab1_rag_response(q_text, comp_name)
+                st.session_state["tab1_answer_input"] = grounded_txt
             st.session_state.pop("tab1_last_rag_report", None)
             st.rerun()
 
@@ -499,14 +535,13 @@ with tab1:
             index=default_idx,
             key="tab1_company_select"
         )
-        # If user switches company in dropdown, auto-adapt question & clear stale text
+        # If user switches company in dropdown, auto-adapt question & pre-populate exact audited data
         if company_input != "(Auto-Detect from Question)" and company_input != st.session_state.get("last_active_company"):
             st.session_state["last_active_company"] = company_input
-            st.session_state["tab1_question_input"] = f"What was {company_input}'s revenue in Q4 FY24?"
-            # Pre-populate grounded or default answer for this company
-            rev_r = store.lookup_metric(company_input, "revenue", "Q4")
-            if rev_r:
-                st.session_state["tab1_answer_input"] = f"According to {rev_r.source_document} ({rev_r.page_number}), {company_input} reported consolidated revenue of {rev_r.reported_str}."
+            new_q = f"What was {company_input}'s revenue in Q4 FY24?"
+            st.session_state["tab1_question_input"] = new_q
+            grounded_txt, _, _ = _generate_tab1_rag_response(new_q, company_input)
+            st.session_state["tab1_answer_input"] = grounded_txt
             st.session_state.pop("tab1_last_rag_report", None)
             st.rerun()
 
@@ -517,6 +552,14 @@ with tab1:
             key="tab1_question_input",
             help="Type ANY financial question: quarterly earnings, margins, valuation ratios, F-score, DCF, SIP, or cross-company comparisons."
         )
+
+    # Ensure answer box is never empty
+    if not st.session_state.get("tab1_answer_input") or not st.session_state["tab1_answer_input"].strip():
+        active_c = st.session_state.get("tab1_company_select") or selected_preset["company"]
+        if active_c == "(Auto-Detect from Question)":
+            active_c = selected_preset["company"]
+        default_ans, _, _ = _generate_tab1_rag_response(st.session_state.get("tab1_question_input", selected_preset["question"]), active_c)
+        st.session_state["tab1_answer_input"] = default_ans
 
     answer_input = st.text_area(
         "LLM Generated Answer to Audit (or click 'Generate Grounded Answer with RAG' below)",
@@ -543,48 +586,6 @@ with tab1:
             st.session_state.pop("tab1_last_rag_report", None)
             st.rerun()
 
-    # Helper function to generate RAG answer for Tab 1
-    def _generate_tab1_rag_response(q_text: str, comp_sel: str):
-        # Prioritize company selected by user, then question entity, then fallback
-        if comp_sel and comp_sel != "(Auto-Detect from Question)":
-            comp = comp_sel
-        else:
-            comp = agent.claim_extractor._detect_company(q_text) or "HDFC"
-        
-        q_lower = q_text.lower()
-        rev_rec = store.lookup_metric(comp, "revenue", "Q4")
-        net_rec = store.lookup_metric(comp, "net_profit", "Q4")
-        opm_rec = store.lookup_metric(comp, "operating_margin", "Q4")
-        div_rec = store.lookup_metric(comp, "dividend", "Q4")
-        growth_rec = store.lookup_metric(comp, "revenue_growth", "Q4")
-
-        # Specific metric checks
-        if "revenue" in q_lower and rev_rec:
-            ans = f"According to {rev_rec.source_document} ({rev_rec.page_number}), {comp} reported consolidated revenue from operations of {rev_rec.reported_str}."
-            if growth_rec:
-                ans += f" Revenue grew {growth_rec.reported_str}."
-            return ans, comp, [rev_rec.source_document]
-        elif "margin" in q_lower and opm_rec:
-            ans = f"According to {opm_rec.source_document} ({opm_rec.page_number}), {comp} achieved an operating margin of {opm_rec.reported_str}."
-            if div_rec:
-                ans += f" The board announced a dividend of {div_rec.reported_str}."
-            return ans, comp, [opm_rec.source_document]
-        elif ("profit" in q_lower or "net income" in q_lower or "pat" in q_lower) and net_rec:
-            ans = f"According to {net_rec.source_document} ({net_rec.page_number}), {comp} reported net profit of {net_rec.reported_str}."
-            return ans, comp, [net_rec.source_document]
-        elif any(w in q_lower for w in ["compare", "vs", "versus"]):
-            rep = agent.analyze(q_text)
-            return rep.direct_answer, comp, rep.evidence_citations
-        else:
-            # Query RAG conceptual knowledge base
-            rag_res = rag_engine.answer_query(q_text, company_context=comp)
-            if rag_res.get("grounded") and rag_res.get("confidence", 0) > 0.4:
-                return rag_res["answer"], comp, [s["title"] for s in rag_res.get("sources", [])]
-            # Fallback to research agent
-            rep = agent.analyze(q_text)
-            ans = rep.direct_answer or f"According to audited filings, {comp} reported Q4 revenue of {rev_rec.reported_str if rev_rec else 'N/A'} and operating margin of {opm_rec.reported_str if opm_rec else 'N/A'}."
-            return ans, comp, rep.evidence_citations
-
     # ── Case A: User clicked "✨ Generate with RAG Model" ──
     if btn_rag_generate:
         active_comp = company_input if company_input != "(Auto-Detect from Question)" else (agent.claim_extractor._detect_company(question_input) or "HDFC")
@@ -597,6 +598,15 @@ with tab1:
             st.session_state["tab1_last_rag_ans"] = grounded_ans
             st.session_state["tab1_last_rag_sources"] = rag_sources
             st.session_state["tab1_last_rag_comp"] = active_comp
+
+            # Audit the generated RAG answer
+            rag_report = detector.inspect(
+                question=question_input,
+                answer=grounded_ans,
+                company=active_comp
+            )
+            st.session_state["tab1_last_rag_report"] = rag_report
+            st.rerun()
 
             # Audit the generated RAG answer
             rag_report = detector.inspect(
@@ -656,7 +666,11 @@ with tab1:
             grounded_ans, active_comp, rag_sources = _generate_tab1_rag_response(question_input, active_comp)
             raw_ans = answer_input
             if not raw_ans.strip() or (active_comp != "TCS" and "tcs" in raw_ans.lower()):
-                raw_ans = f"{active_comp} reported quarterly revenue of ₹35,500 crore and net profit of ₹22,000 crore in Q4 FY24, showing strong growth across verticals."
+                is_us = active_comp in {"APPLE", "MICROSOFT", "GOOGLE", "NVIDIA", "AMAZON", "META", "TESLA"}
+                if is_us:
+                    raw_ans = f"{active_comp} reported quarterly revenue of $112.5 billion and net income of $28.4 billion in Q4 2024, showing strong momentum."
+                else:
+                    raw_ans = f"{active_comp} reported quarterly revenue of ₹35,500 crore and net profit of ₹22,000 crore in Q4 FY24, showing strong growth across verticals."
 
             # Audit both
             raw_report = detector.inspect(question=question_input, answer=raw_ans, company=active_comp)

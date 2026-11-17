@@ -152,7 +152,7 @@ class FinancialResearchAgent:
         # Step 2: Retrieve Audited Financial Metrics
         rev_q4 = self.report_store.lookup_metric(company, "revenue", "Q4")
         net_q4 = self.report_store.lookup_metric(company, "net_profit", "Q4")
-        opm_q4 = self.report_store.lookup_metric(company, "operating_margin", "Q4")
+        opm_q4 = self.report_store.lookup_metric(company, "operating_margin", "Q4") or self.report_store.lookup_metric(company, "gross_margin", "Q4")
         order_book = self.report_store.lookup_metric(company, "order_book", "Q4")
         div_rec = self.report_store.lookup_metric(company, "dividend", "Q4")
         rev_fy = self.report_store.lookup_metric(company, "revenue", "FY24")
@@ -378,9 +378,10 @@ class FinancialResearchAgent:
                 )
         if any(w in q_lower for w in ["margin", "profitability"]):
             if opm_q4:
+                m_label = "gross margin" if "gross" in getattr(opm_q4, "metric", "") else "operating margin"
                 return (
                     f"**Audited Margin Performance for {company}:**\n\n"
-                    f"{company} achieved an operating margin of **{opm_q4.reported_str}** for the quarter ({opm_q4.source_document}).\n\n"
+                    f"{company} achieved a {m_label} of **{opm_q4.reported_str}** for the quarter ({opm_q4.source_document}).\n\n"
                     f"*Exact Regulatory Quote:* \"{opm_q4.exact_filing_quote}\""
                 )
 

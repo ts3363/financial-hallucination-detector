@@ -117,6 +117,11 @@ class FinancialClaimExtractor:
                 prefix = sent[max(0, start_idx - 3):start_idx].lower()
                 if re.search(r'[qf][y]?$', prefix):
                     continue  # Ignore "4" in "Q4" or "24" in "FY24"
+
+                # Check following characters for 10-K, 10-Q, 8-K SEC form names
+                rest_of_word = sent[start_idx:min(len(sent), match.end() + 3)].lower()
+                if re.match(r'^10-[kq]\b', rest_of_word) or re.match(r'^8-k\b', rest_of_word):
+                    continue
                 
                 # If neither currency nor scale is present:
                 if not curr_str and not scale_str:

@@ -45,19 +45,87 @@ class TemporalGrowthVerifier:
             "fy_annual_revenue": 153670.0,
             "q4_quarterly_revenue": 37923.0,
         },
+        "RELIANCE": {
+            "q4_yoy_growth_pct": 11.3,
+            "q4_qoq_growth_pct": 4.1,
+            "fy_annual_revenue": 1000122.0,
+            "q4_quarterly_revenue": 240715.0,
+        },
         "APPLE": {
             "q4_yoy_growth_pct": 6.0,
             "q4_qoq_growth_pct": 10.7,
             "fy_annual_revenue": 391035.0,
             "q4_quarterly_revenue": 94930.0,
-        }
+        },
+        "MICROSOFT": {
+            "q4_yoy_growth_pct": 15.0,
+            "q4_qoq_growth_pct": 4.5,
+            "fy_annual_revenue": 245120.0,
+            "q4_quarterly_revenue": 64730.0,
+        },
+        "GOOGLE": {
+            "q4_yoy_growth_pct": 13.5,
+            "q4_qoq_growth_pct": 3.8,
+            "fy_annual_revenue": 307390.0,
+            "q4_quarterly_revenue": 86310.0,
+        },
+        "NVIDIA": {
+            "q4_yoy_growth_pct": 265.0,
+            "q4_qoq_growth_pct": 22.0,
+            "fy_annual_revenue": 60920.0,
+            "q4_quarterly_revenue": 22100.0,
+        },
+        "AMAZON": {
+            "q4_yoy_growth_pct": 14.0,
+            "q4_qoq_growth_pct": 18.0,
+            "fy_annual_revenue": 574780.0,
+            "q4_quarterly_revenue": 169960.0,
+        },
+        "META": {
+            "q4_yoy_growth_pct": 25.0,
+            "q4_qoq_growth_pct": 17.5,
+            "fy_annual_revenue": 134900.0,
+            "q4_quarterly_revenue": 40110.0,
+        },
+        "TESLA": {
+            "q4_yoy_growth_pct": 3.0,
+            "q4_qoq_growth_pct": 7.8,
+            "fy_annual_revenue": 96770.0,
+            "q4_quarterly_revenue": 25170.0,
+        },
+        "HDFC": {
+            "q4_yoy_growth_pct": 37.1,
+            "q4_qoq_growth_pct": 2.5,
+            "fy_annual_revenue": 115340.0,
+            "q4_quarterly_revenue": 29077.0,
+        },
+        "WIPRO": {
+            "q4_yoy_growth_pct": -4.2,
+            "q4_qoq_growth_pct": -0.3,
+            "fy_annual_revenue": 89760.0,
+            "q4_quarterly_revenue": 22208.0,
+        },
+        "TATAMOTORS": {
+            "q4_yoy_growth_pct": 13.3,
+            "q4_qoq_growth_pct": 8.5,
+            "fy_annual_revenue": 437930.0,
+            "q4_quarterly_revenue": 119986.0,
+        },
     }
 
     def verify_temporal_statement(self, sentence: str, company: str = "TCS") -> TemporalVerificationResult:
         """Inspect a sentence for YoY vs QoQ basis flip or full-year vs quarter confusion."""
         text_lower = sentence.lower()
         comp_upper = company.upper()
-        bench = self.BENCHMARK_GROWTH.get(comp_upper, self.BENCHMARK_GROWTH["TCS"])
+        bench = self.BENCHMARK_GROWTH.get(comp_upper)
+        if not bench:
+            return TemporalVerificationResult(
+                claim_text=sentence,
+                issue_type="CLEAN",
+                detected_issue=False,
+                explanation="No benchmark growth rules for company.",
+                suggested_correction=None
+            )
 
         # ── 1. Check YoY vs QoQ basis flip ────────────────────
         # e.g., "grew 3.5% QoQ" vs actual 3.5% YoY
