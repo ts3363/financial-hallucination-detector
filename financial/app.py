@@ -438,63 +438,89 @@ with tab1:
         "filings (SEC, NSE/BSE) to detect and eliminate hallucinations."
     )
 
-    # ── Synchronize Presets with Session State ──
+    # ── Synchronize Presets & State with Session State ──
     if "last_preset_loaded" not in st.session_state:
         st.session_state["last_preset_loaded"] = None
 
     if st.session_state["last_preset_loaded"] != preset:
-        st.session_state["tab1_question"] = selected_preset["question"]
-        st.session_state["tab1_answer"] = selected_preset["answer"]
-        st.session_state["tab1_company"] = selected_preset["company"]
+        st.session_state["tab1_question_input"] = selected_preset["question"]
+        st.session_state["tab1_answer_input"] = selected_preset["answer"]
+        st.session_state["tab1_company_select"] = selected_preset["company"]
+        st.session_state["last_active_company"] = selected_preset["company"]
         st.session_state["last_preset_loaded"] = preset
 
     # ── Quick Finance Question Chips ──
     st.markdown("#### ⚡ Quick Finance Questions — Click to Test Instantly:")
-    qchips = st.columns(6)
+    qchips = st.columns(7)
     quick_samples = [
-        ("TCS Q4 Revenue", "TCS", "What was TCS's revenue in Q4 FY24?"),
-        ("Apple Gross Margin", "APPLE", "What was Apple's gross margin in Q4 FY24?"),
+        ("TCS Revenue", "TCS", "What was TCS's revenue in Q4 FY24?"),
+        ("HDFC Revenue", "HDFC", "What was HDFC's revenue in Q4 FY24?"),
+        ("HDFC Net Profit", "HDFC", "What was HDFC Bank's net profit in Q4 FY24?"),
+        ("Apple Margin", "APPLE", "What was Apple's gross margin in Q4 FY24?"),
         ("Nvidia Data Center", "NVIDIA", "What was Nvidia's revenue and gross margin in Q4 FY24?"),
-        ("Piotroski F-Score", "TCS", "Explain Piotroski F-Score and its 9 criteria"),
         ("Altman Z-Score", "TCS", "What is Altman Z-Score safe zone and how does it predict bankruptcy?"),
-        ("TCS vs Infosys", "TCS", "How do TCS margins compare to Infosys?"),
+        ("Piotroski F-Score", "TCS", "Explain Piotroski F-Score and its 9 criteria"),
     ]
     for qi, (label, comp_name, q_text) in enumerate(quick_samples):
         if qchips[qi].button(label, key=f"tab1_chip_{qi}", use_container_width=True):
-            st.session_state["tab1_question"] = q_text
-            st.session_state["tab1_company"] = comp_name
+            st.session_state["tab1_question_input"] = q_text
+            st.session_state["tab1_company_select"] = comp_name
+            st.session_state["last_active_company"] = comp_name
             # If standard preset matches, load its answer; otherwise generate RAG answer
             matched_preset = None
             for pk, pv in PRESETS.items():
                 if pv["question"] == q_text:
                     matched_preset = pv["answer"]
                     break
-            st.session_state["tab1_answer"] = matched_preset or f"Analyzing financial data for: {q_text}"
+            if matched_preset:
+                st.session_state["tab1_answer_input"] = matched_preset
+            else:
+                # Pre-generate RAG answer
+                rev_r = store.lookup_metric(comp_name, "revenue", "Q4")
+                net_r = store.lookup_metric(comp_name, "net_profit", "Q4")
+                if "revenue" in q_text.lower() and rev_r:
+                    st.session_state["tab1_answer_input"] = f"According to {rev_r.source_document} ({rev_r.page_number}), {comp_name} reported consolidated revenue of {rev_r.reported_str}."
+                elif "profit" in q_text.lower() and net_r:
+                    st.session_state["tab1_answer_input"] = f"According to {net_r.source_document} ({net_r.page_number}), {comp_name} reported net profit of {net_r.reported_str}."
+                else:
+                    st.session_state["tab1_answer_input"] = f"Analyzing financial data for {comp_name}..."
+            st.session_state.pop("tab1_last_rag_report", None)
             st.rerun()
 
     # ── Input Fields ──
     col_in1, col_in2 = st.columns([1, 3])
     with col_in1:
-        current_comp = st.session_state.get("tab1_company", selected_preset["company"])
         comp_options = ["(Auto-Detect from Question)"] + ALL_COMPANIES
-        default_idx = comp_options.index(current_comp) if current_comp in comp_options else 0
+        current_comp_val = st.session_state.get("tab1_company_select", selected_preset["company"])
+        default_idx = comp_options.index(current_comp_val) if current_comp_val in comp_options else 0
         company_input = st.selectbox(
             "Target Company / Context",
             comp_options,
             index=default_idx,
             key="tab1_company_select"
         )
+        # If user switches company in dropdown, auto-adapt question & clear stale text
+        if company_input != "(Auto-Detect from Question)" and company_input != st.session_state.get("last_active_company"):
+            st.session_state["last_active_company"] = company_input
+            st.session_state["tab1_question_input"] = f"What was {company_input}'s revenue in Q4 FY24?"
+            # Pre-populate grounded or default answer for this company
+            rev_r = store.lookup_metric(company_input, "revenue", "Q4")
+            if rev_r:
+                st.session_state["tab1_answer_input"] = f"According to {rev_r.source_document} ({rev_r.page_number}), {company_input} reported consolidated revenue of {rev_r.reported_str}."
+            st.session_state.pop("tab1_last_rag_report", None)
+            st.rerun()
+
     with col_in2:
         question_input = st.text_input(
             "Ask Any Question Related to Finance",
-            value=st.session_state.get("tab1_question", selected_preset["question"]),
+            value=st.session_state.get("tab1_question_input", selected_preset["question"]),
             key="tab1_question_input",
             help="Type ANY financial question: quarterly earnings, margins, valuation ratios, F-score, DCF, SIP, or cross-company comparisons."
         )
 
     answer_input = st.text_area(
         "LLM Generated Answer to Audit (or click 'Generate Grounded Answer with RAG' below)",
-        value=st.session_state.get("tab1_answer", selected_preset["answer"]),
+        value=st.session_state.get("tab1_answer_input", selected_preset["answer"]),
         height=100,
         key="tab1_answer_input"
     )
@@ -514,11 +540,17 @@ with tab1:
         clear_log = st.button("🗑️ Clear Log", use_container_width=True)
         if clear_log:
             st.session_state["audit_log"] = []
+            st.session_state.pop("tab1_last_rag_report", None)
             st.rerun()
 
     # Helper function to generate RAG answer for Tab 1
     def _generate_tab1_rag_response(q_text: str, comp_sel: str):
-        comp = comp_sel if comp_sel != "(Auto-Detect from Question)" else (agent.claim_extractor._detect_company(q_text) or "TCS")
+        # Prioritize company selected by user, then question entity, then fallback
+        if comp_sel and comp_sel != "(Auto-Detect from Question)":
+            comp = comp_sel
+        else:
+            comp = agent.claim_extractor._detect_company(q_text) or "HDFC"
+        
         q_lower = q_text.lower()
         rev_rec = store.lookup_metric(comp, "revenue", "Q4")
         net_rec = store.lookup_metric(comp, "net_profit", "Q4")
@@ -537,7 +569,7 @@ with tab1:
             if div_rec:
                 ans += f" The board announced a dividend of {div_rec.reported_str}."
             return ans, comp, [opm_rec.source_document]
-        elif "profit" in q_lower and net_rec:
+        elif ("profit" in q_lower or "net income" in q_lower or "pat" in q_lower) and net_rec:
             ans = f"According to {net_rec.source_document} ({net_rec.page_number}), {comp} reported net profit of {net_rec.reported_str}."
             return ans, comp, [net_rec.source_document]
         elif any(w in q_lower for w in ["compare", "vs", "versus"]):
@@ -555,11 +587,16 @@ with tab1:
 
     # ── Case A: User clicked "✨ Generate with RAG Model" ──
     if btn_rag_generate:
+        active_comp = company_input if company_input != "(Auto-Detect from Question)" else (agent.claim_extractor._detect_company(question_input) or "HDFC")
         with st.spinner("Retrieving verified filings & generating grounded RAG answer..."):
-            grounded_ans, active_comp, rag_sources = _generate_tab1_rag_response(question_input, company_input)
-            st.session_state["tab1_answer"] = grounded_ans
-            st.session_state["tab1_question"] = question_input
-            st.session_state["tab1_company"] = active_comp
+            grounded_ans, active_comp, rag_sources = _generate_tab1_rag_response(question_input, active_comp)
+            st.session_state["tab1_answer_input"] = grounded_ans
+            st.session_state["tab1_question_input"] = question_input
+            st.session_state["tab1_company_select"] = active_comp
+            st.session_state["last_active_company"] = active_comp
+            st.session_state["tab1_last_rag_ans"] = grounded_ans
+            st.session_state["tab1_last_rag_sources"] = rag_sources
+            st.session_state["tab1_last_rag_comp"] = active_comp
 
             # Audit the generated RAG answer
             rag_report = detector.inspect(
@@ -567,10 +604,18 @@ with tab1:
                 answer=grounded_ans,
                 company=active_comp
             )
+            st.session_state["tab1_last_rag_report"] = rag_report
+            st.rerun()
+
+    # ── Display Last Generated RAG Report (if available) ──
+    if st.session_state.get("tab1_last_rag_ans") and st.session_state.get("tab1_last_rag_report"):
+        rag_ans_disp = st.session_state["tab1_last_rag_ans"]
+        rag_report = st.session_state["tab1_last_rag_report"]
+        rag_sources = st.session_state.get("tab1_last_rag_sources", [])
 
         st.markdown("---")
-        st.success("✅ **RAG-Grounded Answer Generated!** The answer below was constructed from verified financial filings and knowledge chunks — with 0% hallucination:")
-        st.info(grounded_ans)
+        st.success("✅ **RAG-Grounded Answer Generated & Verified!** The answer below was constructed from verified financial filings and knowledge chunks — with 0% hallucination:")
+        st.info(rag_ans_disp)
 
         # RAG Grounding Telemetry
         rg_col1, rg_col2, rg_col3 = st.columns(3)
@@ -606,9 +651,12 @@ with tab1:
 
     # ── Case B: User clicked "⚔️ Side-by-Side: LLM vs RAG" ──
     elif btn_compare_models:
+        active_comp = company_input if company_input != "(Auto-Detect from Question)" else (agent.claim_extractor._detect_company(question_input) or "HDFC")
         with st.spinner("Running side-by-side audit: Unverified LLM vs Financial RAG Model..."):
-            grounded_ans, active_comp, rag_sources = _generate_tab1_rag_response(question_input, company_input)
+            grounded_ans, active_comp, rag_sources = _generate_tab1_rag_response(question_input, active_comp)
             raw_ans = answer_input
+            if not raw_ans.strip() or (active_comp != "TCS" and "tcs" in raw_ans.lower()):
+                raw_ans = f"{active_comp} reported quarterly revenue of ₹35,500 crore and net profit of ₹22,000 crore in Q4 FY24, showing strong growth across verticals."
 
             # Audit both
             raw_report = detector.inspect(question=question_input, answer=raw_ans, company=active_comp)
@@ -668,14 +716,17 @@ with tab1:
 
     # ── Case C: User clicked "🚀 Audit Current Answer" ──
     elif audit_clicked:
-        active_comp = company_input if company_input != "(Auto-Detect from Question)" else (agent.claim_extractor._detect_company(question_input) or "TCS")
-        with st.spinner("Extracting claims & cross-verifying with regulatory filings..."):
-            report = detector.inspect(
-                question=question_input,
-                answer=answer_input,
-                company=active_comp
-            )
-            healing_result = healer.heal(report)
+        if not answer_input.strip():
+            st.warning("⚠️ The answer box is empty. Type an answer to audit or click '✨ Generate with RAG Model' above!")
+        else:
+            active_comp = company_input if company_input != "(Auto-Detect from Question)" else (agent.claim_extractor._detect_company(f"{question_input} {answer_input}") or "HDFC")
+            with st.spinner("Extracting claims & cross-verifying with regulatory filings..."):
+                report = detector.inspect(
+                    question=question_input,
+                    answer=answer_input,
+                    company=active_comp
+                )
+                healing_result = healer.heal(report)
 
         # Save to session audit log
         st.session_state["audit_log"].append({
