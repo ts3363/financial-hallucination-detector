@@ -491,6 +491,14 @@ with tab1:
         st.session_state["last_active_company"] = selected_preset["company"]
         st.session_state["last_preset_loaded"] = preset
 
+    # ── Apply Any Pending Widget Updates BEFORE Widgets Are Instantiated ──
+    if "pending_tab1_answer" in st.session_state:
+        st.session_state["tab1_answer_input"] = st.session_state.pop("pending_tab1_answer")
+    if "pending_tab1_question" in st.session_state:
+        st.session_state["tab1_question_input"] = st.session_state.pop("pending_tab1_question")
+    if "pending_tab1_company" in st.session_state:
+        st.session_state["tab1_company_select"] = st.session_state.pop("pending_tab1_company")
+
     # ── Quick Finance Question Chips ──
     st.markdown("#### ⚡ Quick Finance Questions — Click to Test Instantly:")
     qchips = st.columns(8)
@@ -506,8 +514,8 @@ with tab1:
     ]
     for qi, (label, comp_name, q_text) in enumerate(quick_samples):
         if qchips[qi].button(label, key=f"tab1_chip_{qi}", use_container_width=True):
-            st.session_state["tab1_question_input"] = q_text
-            st.session_state["tab1_company_select"] = comp_name
+            st.session_state["pending_tab1_question"] = q_text
+            st.session_state["pending_tab1_company"] = comp_name
             st.session_state["last_active_company"] = comp_name
             # If standard preset matches, load its answer; otherwise generate RAG answer
             matched_preset = None
@@ -516,10 +524,10 @@ with tab1:
                     matched_preset = pv["answer"]
                     break
             if matched_preset:
-                st.session_state["tab1_answer_input"] = matched_preset
+                st.session_state["pending_tab1_answer"] = matched_preset
             else:
                 grounded_txt, _, _ = _generate_tab1_rag_response(q_text, comp_name)
-                st.session_state["tab1_answer_input"] = grounded_txt
+                st.session_state["pending_tab1_answer"] = grounded_txt
             st.session_state.pop("tab1_last_rag_report", None)
             st.rerun()
 
@@ -539,9 +547,9 @@ with tab1:
         if company_input != "(Auto-Detect from Question)" and company_input != st.session_state.get("last_active_company"):
             st.session_state["last_active_company"] = company_input
             new_q = f"What was {company_input}'s revenue in Q4 FY24?"
-            st.session_state["tab1_question_input"] = new_q
+            st.session_state["pending_tab1_question"] = new_q
             grounded_txt, _, _ = _generate_tab1_rag_response(new_q, company_input)
-            st.session_state["tab1_answer_input"] = grounded_txt
+            st.session_state["pending_tab1_answer"] = grounded_txt
             st.session_state.pop("tab1_last_rag_report", None)
             st.rerun()
 
@@ -591,29 +599,19 @@ with tab1:
         active_comp = company_input if company_input != "(Auto-Detect from Question)" else (agent.claim_extractor._detect_company(question_input) or "HDFC")
         with st.spinner("Retrieving verified filings & generating grounded RAG answer..."):
             grounded_ans, active_comp, rag_sources = _generate_tab1_rag_response(question_input, active_comp)
-            st.session_state["tab1_answer_input"] = grounded_ans
-            st.session_state["tab1_question_input"] = question_input
-            st.session_state["tab1_company_select"] = active_comp
+            rag_report = detector.inspect(
+                question=question_input,
+                answer=grounded_ans,
+                company=active_comp
+            )
+            # Stage updates so they are safely applied before widgets are instantiated on next rerun
+            st.session_state["pending_tab1_answer"] = grounded_ans
+            st.session_state["pending_tab1_question"] = question_input
+            st.session_state["pending_tab1_company"] = active_comp
             st.session_state["last_active_company"] = active_comp
             st.session_state["tab1_last_rag_ans"] = grounded_ans
             st.session_state["tab1_last_rag_sources"] = rag_sources
             st.session_state["tab1_last_rag_comp"] = active_comp
-
-            # Audit the generated RAG answer
-            rag_report = detector.inspect(
-                question=question_input,
-                answer=grounded_ans,
-                company=active_comp
-            )
-            st.session_state["tab1_last_rag_report"] = rag_report
-            st.rerun()
-
-            # Audit the generated RAG answer
-            rag_report = detector.inspect(
-                question=question_input,
-                answer=grounded_ans,
-                company=active_comp
-            )
             st.session_state["tab1_last_rag_report"] = rag_report
             st.rerun()
 
