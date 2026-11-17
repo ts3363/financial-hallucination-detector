@@ -185,7 +185,7 @@ PRESETS = {
     },
     "14. Clean Grounded Answer (100% Verified TCS)": {
         "company": "TCS", "question": "Provide verified Q4 results for TCS.",
-        "answer": "According to the company filings, TCS posted Q4 FY24 revenue from operations of Rs 61,237 crore with an operating margin of 26.0% and net profit of Rs 12,434 crore."
+        "answer": "According to TCS Q4 FY24 Audited Financial Results (NSE/BSE Press Release) (Page 1), TCS reported consolidated revenue of ₹61,237 crore and net profit of ₹12,434 crore. Operating margin was 26.0%."
     },
     "15. Clean Grounded Answer (100% Verified HDFC)": {
         "company": "HDFC", "question": "Provide verified Q4 results for HDFC Bank.",
@@ -490,6 +490,10 @@ with tab1:
         st.session_state["tab1_company_select"] = selected_preset["company"]
         st.session_state["last_active_company"] = selected_preset["company"]
         st.session_state["last_preset_loaded"] = preset
+        st.session_state.pop("tab1_last_rag_ans", None)
+        st.session_state.pop("tab1_last_rag_report", None)
+        st.session_state.pop("tab1_audit_report", None)
+        st.session_state.pop("tab1_healing_result", None)
 
     # ── Apply Any Pending Widget Updates BEFORE Widgets Are Instantiated ──
     if "pending_tab1_answer" in st.session_state:
@@ -529,6 +533,7 @@ with tab1:
                 grounded_txt, _, _ = _generate_tab1_rag_response(q_text, comp_name)
                 st.session_state["pending_tab1_answer"] = grounded_txt
             st.session_state.pop("tab1_last_rag_report", None)
+            st.session_state.pop("tab1_last_rag_ans", None)
             st.rerun()
 
     # ── Input Fields ──
@@ -551,6 +556,7 @@ with tab1:
             grounded_txt, _, _ = _generate_tab1_rag_response(new_q, company_input)
             st.session_state["pending_tab1_answer"] = grounded_txt
             st.session_state.pop("tab1_last_rag_report", None)
+            st.session_state.pop("tab1_last_rag_ans", None)
             st.rerun()
 
     with col_in2:
@@ -592,10 +598,120 @@ with tab1:
         if clear_log:
             st.session_state["audit_log"] = []
             st.session_state.pop("tab1_last_rag_report", None)
+            st.session_state.pop("tab1_last_rag_ans", None)
+            st.session_state.pop("tab1_audit_report", None)
             st.rerun()
 
-    # ── Case A: User clicked "✨ Generate with RAG Model" ──
-    if btn_rag_generate:
+    # ── Action 1: User clicked "🚀 Audit Current Answer" ──
+    if audit_clicked:
+        # Clear any stale RAG view so the audit report of the current answer displays
+        st.session_state.pop("tab1_last_rag_ans", None)
+        st.session_state.pop("tab1_last_rag_report", None)
+
+        if not answer_input.strip():
+            st.warning("⚠️ The answer box is empty. Type an answer to audit or click '✨ Generate with RAG Model' above!")
+        else:
+            active_comp = company_input if company_input != "(Auto-Detect from Question)" else (agent.claim_extractor._detect_company(f"{question_input} {answer_input}") or "HDFC")
+            with st.spinner("Extracting claims & cross-verifying with regulatory filings..."):
+                report = detector.inspect(
+                    question=question_input,
+                    answer=answer_input,
+                    company=active_comp
+                )
+                healing_result = healer.heal(report)
+
+            # Save to session audit log
+            st.session_state["audit_log"].append({
+                "Time": datetime.datetime.now().strftime("%H:%M:%S"),
+                "Company": active_comp,
+                "Risk": report.risk_level.value,
+                "Hallucination Prob": f"{report.hallucination_probability:.1%}",
+                "Quality": f"{report.quality_score:.2f}",
+                "Claims": len(report.verified_claims),
+                "Healed": "Yes" if healing_result.healing_applied else "No",
+            })
+
+            st.markdown("---")
+
+            # KPI Cards
+            kpi1, kpi2, kpi3, kpi4 = st.columns(4)
+            prob = report.hallucination_probability
+            delta_color = "inverse" if prob > 0.5 else "normal"
+            kpi1.metric("Hallucination Probability", f"{prob:.1%}",
+                        delta="High Risk / Hallucinated" if prob > 0.5 else "Safe / Grounded", delta_color=delta_color)
+            kpi2.metric("Audit Risk Tier", report.risk_level.value)
+            kpi3.metric("Quality & Grounding", f"{report.quality_score:.2f} / 1.0")
+            kpi4.metric("Verification Latency", f"{report.latency_ms:.1f} ms")
+
+            # Hallucination probability gauge
+            fig_prob = go.Figure(go.Indicator(
+                mode="gauge+number+delta",
+                value=round(prob * 100, 1),
+                title={"text": "Hallucination Risk Score", "font": {"size": 14}},
+                number={"suffix": "%", "font": {"size": 26}},
+                delta={"reference": 20, "increasing": {"color": "#ff4136"}, "decreasing": {"color": "#2ecc40"}},
+                gauge={
+                    "axis": {"range": [0, 100]},
+                    "bar": {"color": "#ff4136" if prob > 0.5 else "#2ecc40"},
+                    "steps": [
+                        {"range": [0, 30], "color": "#1a3a1a"},
+                        {"range": [30, 60], "color": "#3a3a1a"},
+                        {"range": [60, 100], "color": "#3a1a1a"},
+                    ],
+                    "threshold": {"line": {"color": "white", "width": 2}, "value": 50},
+                }
+            ))
+            fig_prob.update_layout(paper_bgcolor="#0d0d1a", font={"color": "#e0e0e0"}, height=200,
+                                   margin={"l": 30, "r": 30, "t": 50, "b": 10})
+            st.plotly_chart(fig_prob, use_container_width=True)
+
+            # Claim Breakdown Table
+            st.markdown("### 📋 Claim Verification Table")
+            if report.verified_claims:
+                rows = []
+                for vc in report.verified_claims:
+                    status_icon = (
+                        "✅ SUPPORTED" if vc.status == ClaimStatus.SUPPORTED
+                        else ("❌ CONTRADICTED" if vc.status == ClaimStatus.CONTRADICTED else "⚠️ UNKNOWN")
+                    )
+                    rows.append({
+                        "Status": status_icon,
+                        "Metric": vc.claim.metric_label,
+                        "Period": vc.claim.period or "Latest",
+                        "Claimed Value": vc.claimed_value_str,
+                        "Audited Truth": vc.evidence_value_str or "Unverifiable",
+                        "Variance": f"{vc.discrepancy_pct:+.2f}%" if vc.discrepancy_pct is not None else "N/A",
+                        "Filing Source": vc.evidence_source or "None",
+                        "Explanation": vc.explanation,
+                    })
+                df_claims = pd.DataFrame(rows)
+                st.dataframe(df_claims, use_container_width=True)
+            else:
+                st.info("No specific quantitative metrics detected in the answer.")
+
+            # Self-Healing Section
+            st.markdown("### 🩹 Self-Healing: In-Place Correction")
+            col_heal1, col_heal2 = st.columns(2)
+            with col_heal1:
+                st.markdown("**Original LLM Answer:**")
+                st.error(report.answer)
+            with col_heal2:
+                st.markdown("**Audited & Healed Answer:**")
+                if healing_result.healing_applied:
+                    st.success(healing_result.healed_answer)
+                    st.caption(f"Applied {len(healing_result.patches_made)} factual patches.")
+                else:
+                    st.success(healing_result.original_answer)
+                    st.caption("No factual contradictions found. Original answer accepted.")
+
+            with st.expander("🔎 View Full Audited Filing Passages & Quotes"):
+                for vc in report.verified_claims:
+                    if vc.evidence_quote:
+                        st.markdown(f"**{vc.claim.metric_label} Evidence:**")
+                        st.info(f'"{vc.evidence_quote}"\n\n*Source: {vc.evidence_source}*')
+
+    # ── Action 2: User clicked "✨ Generate with RAG Model" ──
+    elif btn_rag_generate:
         active_comp = company_input if company_input != "(Auto-Detect from Question)" else (agent.claim_extractor._detect_company(question_input) or "HDFC")
         with st.spinner("Retrieving verified filings & generating grounded RAG answer..."):
             grounded_ans, active_comp, rag_sources = _generate_tab1_rag_response(question_input, active_comp)
@@ -615,50 +731,10 @@ with tab1:
             st.session_state["tab1_last_rag_report"] = rag_report
             st.rerun()
 
-    # ── Display Last Generated RAG Report (if available) ──
-    if st.session_state.get("tab1_last_rag_ans") and st.session_state.get("tab1_last_rag_report"):
-        rag_ans_disp = st.session_state["tab1_last_rag_ans"]
-        rag_report = st.session_state["tab1_last_rag_report"]
-        rag_sources = st.session_state.get("tab1_last_rag_sources", [])
-
-        st.markdown("---")
-        st.success("✅ **RAG-Grounded Answer Generated & Verified!** The answer below was constructed from verified financial filings and knowledge chunks — with 0% hallucination:")
-        st.info(rag_ans_disp)
-
-        # RAG Grounding Telemetry
-        rg_col1, rg_col2, rg_col3 = st.columns(3)
-        with rg_col1:
-            rg_col1.metric("Hallucination Risk", f"{rag_report.hallucination_probability:.1%}", delta="Safe / 0% Risk")
-        with rg_col2:
-            rg_col2.metric("Grounding Score", f"{rag_report.quality_score:.2f} / 1.0")
-        with rg_col3:
-            rg_col3.metric("Verified Citations", f"{len(rag_sources)} Sources")
-
-        if rag_sources:
-            with st.expander("📚 Retrieved RAG Sources & Filings (Click to inspect)"):
-                for src in rag_sources:
-                    st.markdown(f"• 📎 `{src}`")
-
-        # Claim Breakdown Table
-        if rag_report.verified_claims:
-            st.markdown("### 📋 Claim Verification Table")
-            rows = []
-            for vc in rag_report.verified_claims:
-                status_icon = "✅ SUPPORTED" if vc.status == ClaimStatus.SUPPORTED else ("❌ CONTRADICTED" if vc.status == ClaimStatus.CONTRADICTED else "⚠️ UNKNOWN")
-                rows.append({
-                    "Status": status_icon,
-                    "Metric": vc.claim.metric_label,
-                    "Period": vc.claim.period or "Latest",
-                    "Claimed Value": vc.claimed_value_str,
-                    "Audited Truth": vc.evidence_value_str or "Verified",
-                    "Variance": f"{vc.discrepancy_pct:+.2f}%" if vc.discrepancy_pct is not None else "0.00%",
-                    "Filing Source": vc.evidence_source or "Audited Statement",
-                    "Explanation": vc.explanation,
-                })
-            st.dataframe(pd.DataFrame(rows), use_container_width=True)
-
-    # ── Case B: User clicked "⚔️ Side-by-Side: LLM vs RAG" ──
+    # ── Action 3: User clicked "⚔️ Side-by-Side: LLM vs RAG" ──
     elif btn_compare_models:
+        st.session_state.pop("tab1_last_rag_ans", None)
+        st.session_state.pop("tab1_last_rag_report", None)
         active_comp = company_input if company_input != "(Auto-Detect from Question)" else (agent.claim_extractor._detect_company(question_input) or "HDFC")
         with st.spinner("Running side-by-side audit: Unverified LLM vs Financial RAG Model..."):
             grounded_ans, active_comp, rag_sources = _generate_tab1_rag_response(question_input, active_comp)
@@ -685,7 +761,7 @@ with tab1:
             st.metric(
                 "Hallucination Probability",
                 f"{raw_report.hallucination_probability:.1%}",
-                delta="High Risk" if raw_report.hallucination_probability > 0.5 else "Safe",
+                delta="High Risk / Hallucinated" if raw_report.hallucination_probability > 0.5 else "Safe",
                 delta_color="inverse"
             )
             st.markdown(f"**Audit Status:** `{raw_report.risk_level.value}`")
@@ -726,109 +802,47 @@ with tab1:
             st.markdown("**3. Reduction in Hallucination Risk:**")
             st.success(f"🔻 Dropped from **{raw_report.hallucination_probability:.1%}** ➔ **{rag_report.hallucination_probability:.1%}**")
 
-    # ── Case C: User clicked "🚀 Audit Current Answer" ──
-    elif audit_clicked:
-        if not answer_input.strip():
-            st.warning("⚠️ The answer box is empty. Type an answer to audit or click '✨ Generate with RAG Model' above!")
-        else:
-            active_comp = company_input if company_input != "(Auto-Detect from Question)" else (agent.claim_extractor._detect_company(f"{question_input} {answer_input}") or "HDFC")
-            with st.spinner("Extracting claims & cross-verifying with regulatory filings..."):
-                report = detector.inspect(
-                    question=question_input,
-                    answer=answer_input,
-                    company=active_comp
-                )
-                healing_result = healer.heal(report)
-
-        # Save to session audit log
-        st.session_state["audit_log"].append({
-            "Time": datetime.datetime.now().strftime("%H:%M:%S"),
-            "Company": active_comp,
-            "Risk": report.risk_level.value,
-            "Hallucination Prob": f"{report.hallucination_probability:.1%}",
-            "Quality": f"{report.quality_score:.2f}",
-            "Claims": len(report.verified_claims),
-            "Healed": "Yes" if healing_result.healing_applied else "No",
-        })
+    # ── Display Last Generated RAG Report (when user clicked RAG and hasn't clicked Audit) ──
+    elif st.session_state.get("tab1_last_rag_ans") and st.session_state.get("tab1_last_rag_report"):
+        rag_ans_disp = st.session_state["tab1_last_rag_ans"]
+        rag_report = st.session_state["tab1_last_rag_report"]
+        rag_sources = st.session_state.get("tab1_last_rag_sources", [])
 
         st.markdown("---")
+        st.success("✅ **RAG-Grounded Answer Generated & Verified!** The answer below was constructed from verified financial filings and knowledge chunks — with 0% hallucination:")
+        st.info(rag_ans_disp)
 
-        # KPI Cards
-        kpi1, kpi2, kpi3, kpi4 = st.columns(4)
-        prob = report.hallucination_probability
-        delta_color = "inverse" if prob > 0.5 else "normal"
-        kpi1.metric("Hallucination Probability", f"{prob:.1%}",
-                    delta="High Risk" if prob > 0.5 else "Safe", delta_color=delta_color)
-        kpi2.metric("Audit Risk Tier", report.risk_level.value)
-        kpi3.metric("Quality & Grounding", f"{report.quality_score:.2f} / 1.0")
-        kpi4.metric("Verification Latency", f"{report.latency_ms:.1f} ms")
+        # RAG Grounding Telemetry
+        rg_col1, rg_col2, rg_col3 = st.columns(3)
+        with rg_col1:
+            rg_col1.metric("Hallucination Risk", f"{rag_report.hallucination_probability:.1%}", delta="Safe / 0% Risk")
+        with rg_col2:
+            rg_col2.metric("Grounding Score", f"{rag_report.quality_score:.2f} / 1.0")
+        with rg_col3:
+            rg_col3.metric("Verified Citations", f"{len(rag_sources)} Sources")
 
-        # Hallucination probability gauge
-        fig_prob = go.Figure(go.Indicator(
-            mode="gauge+number+delta",
-            value=round(prob * 100, 1),
-            title={"text": "Hallucination Risk Score", "font": {"size": 14}},
-            number={"suffix": "%", "font": {"size": 26}},
-            delta={"reference": 20, "increasing": {"color": "#ff4136"}, "decreasing": {"color": "#2ecc40"}},
-            gauge={
-                "axis": {"range": [0, 100]},
-                "bar": {"color": "#ff4136" if prob > 0.5 else "#2ecc40"},
-                "steps": [
-                    {"range": [0, 30], "color": "#1a3a1a"},
-                    {"range": [30, 60], "color": "#3a3a1a"},
-                    {"range": [60, 100], "color": "#3a1a1a"},
-                ],
-                "threshold": {"line": {"color": "white", "width": 2}, "value": 50},
-            }
-        ))
-        fig_prob.update_layout(paper_bgcolor="#0d0d1a", font={"color": "#e0e0e0"}, height=200,
-                               margin={"l": 30, "r": 30, "t": 50, "b": 10})
-        st.plotly_chart(fig_prob, use_container_width=True)
+        if rag_sources:
+            with st.expander("📚 Retrieved RAG Sources & Filings (Click to inspect)"):
+                for src in rag_sources:
+                    st.markdown(f"• 📎 `{src}`")
 
         # Claim Breakdown Table
-        st.markdown("### 📋 Claim Verification Table")
-        if report.verified_claims:
+        if rag_report.verified_claims:
+            st.markdown("### 📋 Claim Verification Table")
             rows = []
-            for vc in report.verified_claims:
-                status_icon = (
-                    "✅ SUPPORTED" if vc.status == ClaimStatus.SUPPORTED
-                    else ("❌ CONTRADICTED" if vc.status == ClaimStatus.CONTRADICTED else "⚠️ UNKNOWN")
-                )
+            for vc in rag_report.verified_claims:
+                status_icon = "✅ SUPPORTED" if vc.status == ClaimStatus.SUPPORTED else ("❌ CONTRADICTED" if vc.status == ClaimStatus.CONTRADICTED else "⚠️ UNKNOWN")
                 rows.append({
                     "Status": status_icon,
                     "Metric": vc.claim.metric_label,
                     "Period": vc.claim.period or "Latest",
                     "Claimed Value": vc.claimed_value_str,
-                    "Audited Truth": vc.evidence_value_str or "Unverifiable",
-                    "Variance": f"{vc.discrepancy_pct:+.2f}%" if vc.discrepancy_pct is not None else "N/A",
-                    "Filing Source": vc.evidence_source or "None",
+                    "Audited Truth": vc.evidence_value_str or "Verified",
+                    "Variance": f"{vc.discrepancy_pct:+.2f}%" if vc.discrepancy_pct is not None else "0.00%",
+                    "Filing Source": vc.evidence_source or "Audited Statement",
                     "Explanation": vc.explanation,
                 })
-            df_claims = pd.DataFrame(rows)
-            st.dataframe(df_claims, use_container_width=True)
-        else:
-            st.info("No specific quantitative metrics detected in the answer.")
-
-        # Self-Healing Section
-        st.markdown("### 🩹 Self-Healing: In-Place Correction")
-        col_heal1, col_heal2 = st.columns(2)
-        with col_heal1:
-            st.markdown("**Original LLM Answer:**")
-            st.error(report.answer)
-        with col_heal2:
-            st.markdown("**Audited & Healed Answer:**")
-            if healing_result.healing_applied:
-                st.success(healing_result.healed_answer)
-                st.caption(f"Applied {len(healing_result.patches_made)} factual patches.")
-            else:
-                st.success(healing_result.original_answer)
-                st.caption("No factual contradictions found. Original answer accepted.")
-
-        with st.expander("🔎 View Full Audited Filing Passages & Quotes"):
-            for vc in report.verified_claims:
-                if vc.evidence_quote:
-                    st.markdown(f"**{vc.claim.metric_label} Evidence:**")
-                    st.info(f'"{vc.evidence_quote}"\n\n*Source: {vc.evidence_source}*')
+            st.dataframe(pd.DataFrame(rows), use_container_width=True)
 
     # Audit Log Section
     if st.session_state["audit_log"]:
