@@ -350,6 +350,65 @@ Run financial test suite (30 tests):
 pytest test_financial.py -v
 `
 
+### Claim-level financial evidence and NLI audit
+
+Install the declared application dependencies and spaCy's English model:
+
+```powershell
+python -m pip install -r requirements.txt
+python -m spacy download en_core_web_sm
+```
+
+The **Claim-level NLI Audit** tab adds claim splitting, local TF-IDF retrieval,
+source-attributed evidence from the built-in filing store, uploaded PDFs, local
+PDF/text/CSV/JSON/JSONL files, and locally exported FinanceBench evidence.
+Each paired claim is evaluated on CPU with
+`cross-encoder/nli-deberta-v3-small`; the label map is read from the checkpoint
+configuration and checked before inference. spaCy extracts recognized
+companies, tickers, organizations, and people, while financial rules normalize
+currencies, scales, percentages, and signed values for numerical comparisons.
+
+The first audit downloads the Hugging Face model if it is not already cached;
+subsequent inference is local. FinanceBench data is not downloaded by the app:
+provide a local dataset export or local financial documents. If no sufficiently
+relevant evidence is found, the result is **Insufficient Evidence**, not a
+proven hallucination. Neutral NLI results are reported as **Potential
+Hallucination**, not as proven false claims.
+
+Run the deterministic claim verification tests:
+
+```powershell
+python -m pytest test_claim_verification.py -q
+```
+
+Run the real pretrained-model integration test (downloads the model on first
+use):
+
+```powershell
+$env:RUN_FINANCIAL_NLI_TESTS = "1"
+python -m pytest test_claim_verification.py::TestNLIAndClaimPairing::test_real_deberta_nli_checks_entailment_contradiction_and_neutral -v
+Remove-Item Env:RUN_FINANCIAL_NLI_TESTS
+```
+
+Start the application from the repository root:
+
+```powershell
+python -m streamlit run financial\app.py
+```
+
+The regular financial tests use fixed filing data and do not require a network.
+To test the latest available Yahoo Finance quote against the financial checker
+(the quote may be delayed), set `RUN_LIVE_FINANCIAL_DATA_TESTS=1`:
+
+```powershell
+$env:RUN_LIVE_FINANCIAL_DATA_TESTS = "1"
+python -m pytest test_live_financial_data.py -v
+```
+
+The live integration test requires the existing `yfinance` dependency and an
+internet connection. If live retrieval fails, offline snapshots are labeled
+as non-current and are not used to verify current market claims.
+
 ## Project Structure
 
 `
@@ -359,6 +418,8 @@ hallucination-detector/
 ├── test_hallucination_detector.py     # 70 unit and integration tests
 ├── demo_financial.py                  # Financial demonstration scenarios
 ├── test_financial.py                  # Financial test suite (30 unit & integration tests)
+├── test_claim_verification.py          # Local evidence, claim, and NLI tests
+├── test_live_financial_data.py         # Opt-in Yahoo Finance integration test
 ├── requirements.txt
 ├── README.md
 └── financial/                         # Financial extension package
@@ -375,7 +436,9 @@ hallucination-detector/
     ├── temporal_verifier.py           # Temporal YoY vs QoQ basis flip detector
     ├── rag_indexer.py                 # Regulatory statement & PDF ingestion engine
     ├── research_agent.py              # FinancialResearchAgent (mini Bloomberg analyst)
-    └── app.py                         # Interactive 5-tab Streamlit Web Dashboard
+    ├── evidence_retrieval.py          # Local TF-IDF & FinanceBench/PDF evidence
+    ├── claim_verification.py          # Claim extraction, DeBERTa NLI & consistency checks
+    └── app.py                         # Interactive Streamlit Web Dashboard
 `
 ---
 

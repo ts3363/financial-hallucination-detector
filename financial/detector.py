@@ -354,7 +354,7 @@ class FinancialHallucinationDetector:
         # 2. Check market data (e.g. for P/E ratio, market cap, stock price)
         if claim.metric in ("pe_ratio", "market_cap", "price"):
             quote = self.market_data.get_quote(company)
-            if quote:
+            if quote and quote.is_current and quote.pe_ratio > 0:
                 if claim.metric == "pe_ratio":
                     actual_pe = quote.pe_ratio
                     diff = claim.numeric_value - actual_pe
@@ -365,9 +365,10 @@ class FinancialHallucinationDetector:
                             claimed_value_str=claim.raw_number_str,
                             evidence_value_str=f"{actual_pe:.1f}x",
                             discrepancy_pct=diff,
-                            evidence_source=f"Market Quote ({quote.ticker})",
-                            evidence_quote=f"Trailing P/E ratio is {actual_pe:.1f}x",
-                            explanation=f"P/E ratio verified against live market data: {actual_pe:.1f}x."
+                            evidence_source=f"{quote.source} ({quote.ticker})",
+                            evidence_quote=f"Trailing P/E ratio is {actual_pe:.1f}x"
+                            + (f" as of {quote.as_of}" if quote.as_of else ""),
+                            explanation=f"P/E ratio verified against the latest available market quote: {actual_pe:.1f}x."
                         )
                     else:
                         return VerifiedClaim(
@@ -376,9 +377,10 @@ class FinancialHallucinationDetector:
                             claimed_value_str=claim.raw_number_str,
                             evidence_value_str=f"{actual_pe:.1f}x",
                             discrepancy_pct=diff,
-                            evidence_source=f"Market Quote ({quote.ticker})",
-                            evidence_quote=f"Trailing P/E ratio is {actual_pe:.1f}x",
-                            explanation=f"P/E ratio discrepancy: claimed {claim.raw_number_str} vs actual market multiple {actual_pe:.1f}x."
+                            evidence_source=f"{quote.source} ({quote.ticker})",
+                            evidence_quote=f"Trailing P/E ratio is {actual_pe:.1f}x"
+                            + (f" as of {quote.as_of}" if quote.as_of else ""),
+                            explanation=f"P/E ratio discrepancy: claimed {claim.raw_number_str} vs latest available market multiple {actual_pe:.1f}x."
                         )
 
         # 3. Fallback: Search textual filing chunks

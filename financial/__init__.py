@@ -24,6 +24,22 @@ from .data_sources import (
     MarketDataProvider,
     MarketDataQuote,
 )
+from .claim_verification import (
+    FinancialEntity,
+    FinancialValue,
+    ExtractedFinancialClaim,
+    NumericalComparison,
+    ClaimVerification,
+    FinancialClaimVerificationReport,
+    FinancialEntityExtractor,
+    FinancialClaimExtractor as FinancialClaimExtractorForVerification,
+    DebertaNLIClassifier,
+    FinancialClaimVerifier,
+)
+from .evidence_retrieval import (
+    EvidencePassage,
+    FinancialEvidenceRetriever,
+)
 from .detector import (
     VerifiedClaim,
     FinancialVerificationReport,
@@ -50,6 +66,10 @@ from .peer_benchmark import (
     PeerMetricProfile,
     ComparativeClaimResult,
 )
+from .rag_knowledge_base import (
+    KnowledgeChunk,
+    FinancialRAGEngine,
+)
 from .rag_indexer import (
     FinancialDocumentIndexer,
     ExtractedFilingMetric,
@@ -57,11 +77,6 @@ from .rag_indexer import (
 from .temporal_verifier import (
     TemporalGrowthVerifier,
     TemporalVerificationResult,
-)
-from .rag_knowledge_base import (
-    FinancialRAGEngine,
-    KnowledgeChunk,
-    FINANCIAL_KNOWLEDGE_CORPUS,
 )
 
 __all__ = [
@@ -91,11 +106,21 @@ __all__ = [
     "PeerBenchmarkEngine",
     "PeerMetricProfile",
     "ComparativeClaimResult",
+    "FinancialEntity",
+    "FinancialValue",
+    "ExtractedFinancialClaim",
+    "NumericalComparison",
+    "ClaimVerification",
+    "FinancialClaimVerificationReport",
+    "FinancialEntityExtractor",
+    "DebertaNLIClassifier",
+    "FinancialClaimVerifier",
+    "EvidencePassage",
+    "FinancialEvidenceRetriever",
+    "KnowledgeChunk",
+    "FinancialRAGEngine",
     "FinancialDocumentIndexer",
     "ExtractedFilingMetric",
     "TemporalGrowthVerifier",
     "TemporalVerificationResult",
-    "FinancialRAGEngine",
-    "KnowledgeChunk",
-    "FINANCIAL_KNOWLEDGE_CORPUS",
 ]

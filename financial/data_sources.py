@@ -9,6 +9,7 @@ quarterly earnings statements, and market fundamentals (via yfinance / cache).
 from __future__ import annotations
 import logging
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Dict, List, Optional, Any
 
 from .sample_data import (
@@ -37,6 +38,9 @@ class MarketDataQuote:
     roe: float
     beta: float
     sector: str
+    source: str = "Offline sample cache"
+    as_of: Optional[str] = None
+    is_current: bool = False
 
 
 class FinancialReportStore:
@@ -89,6 +93,15 @@ class FinancialReportStore:
     def get_filing_chunks(self, company: str) -> List[str]:
         """Retrieve all filing text passages for a company."""
         return self._text_chunks.get(company.upper(), [])
+
+    def companies(self) -> List[str]:
+        """Return companies represented in structured filing records."""
+        return list(dict.fromkeys(record.company.upper() for record in self._records))
+
+    def get_evidence_records(self, company: str) -> List[AuditedMetricRecord]:
+        """Return the source-attributed filing records available for a company."""
+        company_upper = company.upper()
+        return [record for record in self._records if record.company.upper() == company_upper]
 
 
 class MarketDataProvider:
@@ -334,12 +347,14 @@ class MarketDataProvider:
                 import yfinance as yf
                 self._yf = yf
             except ImportError:
+                logger.warning("Live market data requested, but yfinance is not installed.")
                 self._yf = None
 
     def get_quote(self, company_or_ticker: str) -> MarketDataQuote:
         """
-        Fetch market data quote. Tries live yfinance first if enabled,
-        falling back seamlessly to offline audited fundamentals.
+        Fetch the latest available Yahoo Finance quote when enabled.
+        A fallback snapshot is returned when live retrieval is unavailable,
+        and is explicitly marked as non-current.
         """
         symbol = company_or_ticker.upper()
         canonical_comp = symbol
@@ -353,9 +368,9 @@ class MarketDataProvider:
         if self._yf and self.enable_live:
             try:
                 t = self._yf.Ticker(symbol)
-                info = t.info
-                if info and "currentPrice" in info or "regularMarketPrice" in info:
-                    price = info.get("currentPrice") or info.get("regularMarketPrice") or 0.0
+                info = t.info or {}
+                price = info.get("currentPrice") or info.get("regularMarketPrice")
+                if price and float(price) > 0:
                     mcap = info.get("marketCap", 0.0)
                     curr = info.get("currency", "USD")
                     mcap_str = f"{mcap:,.0f} {curr}"
@@ -364,6 +379,12 @@ class MarketDataProvider:
                     elif curr == "USD":
                         mcap_str = f"${mcap/1e12:.2f} Trillion" if mcap >= 1e12 else f"${mcap/1e9:.2f} Billion"
 
+                    market_time = info.get("regularMarketTime")
+                    as_of = (
+                        datetime.fromtimestamp(float(market_time), tz=timezone.utc).isoformat()
+                        if market_time
+                        else None
+                    )
                     return MarketDataQuote(
                         ticker=symbol,
                         company_name=info.get("longName", canonical_comp),
@@ -380,9 +401,12 @@ class MarketDataProvider:
                         roe=float(info.get("returnOnEquity", 0.0) or 0.0) * 100.0,
                         beta=float(info.get("beta", 1.0) or 1.0),
                         sector=info.get("sector", "Technology"),
+                        source="Yahoo Finance via yfinance (latest available; may be delayed)",
+                        as_of=as_of,
+                        is_current=True,
                     )
             except Exception as e:
-                logger.debug("Live yfinance query failed, falling back to cache: %s", e)
+                logger.warning("Live yfinance query failed; returning a non-current snapshot: %s", e)
 
         # Fallback to cached fundamentals
         cached = self.OFFLINE_FUNDAMENTALS_CACHE.get(canonical_comp)
@@ -405,6 +429,9 @@ class MarketDataProvider:
                 "beta": 1.02,
                 "sector": "Broad Market Enterprise",
             }
+            quote_source = "Synthetic fallback (not verification evidence)"
+        else:
+            quote_source = "Offline sample cache (snapshot date unknown)"
         return MarketDataQuote(
             ticker=self.TICKER_MAPPING.get(canonical_comp, canonical_comp),
             company_name=cached["name"],
@@ -421,4 +448,5 @@ class MarketDataProvider:
             roe=cached["roe"],
             beta=cached["beta"],
             sector=cached["sector"],
+            source=quote_source,
         )

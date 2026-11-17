@@ -74,6 +74,8 @@ CURRENCY_SCALES: Dict[str, float] = {
     "crore": 1e7,
     "crores": 1e7,
     "cr": 1e7,
+    "lakh crore": 1e12,
+    "lakh crores": 1e12,
     "lakh": 1e5,
     "lakhs": 1e5,
     "lac": 1e5,
@@ -127,6 +129,9 @@ FINANCIAL_METRICS_MAP: Dict[str, List[str]] = {
     "revenue_growth": [
         "revenue growth", "sales growth", "top-line growth", "revenue grew"
     ],
+    "gross_profit": [
+        "gross profit"
+    ],
     "net_profit": [
         "net profit", "net income", "pat", "profit after tax", "bottom-line",
         "bottomline", "net earnings", "profit for the period", "reported profit"
@@ -148,6 +153,15 @@ FINANCIAL_METRICS_MAP: Dict[str, List[str]] = {
     ],
     "eps": [
         "eps", "earnings per share", "diluted eps", "basic eps"
+    ],
+    "assets": [
+        "assets", "total assets"
+    ],
+    "liabilities": [
+        "liabilities", "liability", "total liabilities"
+    ],
+    "cash_flow": [
+        "cash flow", "operating cash flow", "free cash flow"
     ],
     "pe_ratio": [
         "pe ratio", "p/e", "p/e ratio", "price to earnings", "price-to-earnings"

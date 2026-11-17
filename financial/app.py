@@ -31,8 +31,6 @@ from financial.data_sources import FinancialReportStore, MarketDataProvider
 from financial.forensics import ForensicAnalyzer
 from financial.peer_benchmark import PeerBenchmarkEngine
 from financial.rag_indexer import FinancialDocumentIndexer
-from financial.rag_knowledge_base import FinancialRAGEngine, KnowledgeChunk
-from financial.sentiment import FinSentimentAnalyzer
 
 # ── Page Configuration ─────────────────────────────────────────
 st.set_page_config(
@@ -116,7 +114,8 @@ margin_tolerance = st.sidebar.slider(
     help="Allowable percentage point variance for margins and ratios."
 )
 enable_live_market = st.sidebar.checkbox(
-    "Enable Live Market Data (yfinance)", value=False,
+    "Enable Live Market Data (yfinance)",
+    value=False,
     help="Query live market quotes if online; falls back to cached fundamentals."
 )
 
@@ -243,11 +242,9 @@ def get_engines(rel_tol: float, m_tol: float, live: bool):
     forensics = ForensicAnalyzer()
     peer_engine = PeerBenchmarkEngine()
     indexer = FinancialDocumentIndexer(report_store=store)
-    rag_engine = FinancialRAGEngine()
-    sentiment_analyzer = FinSentimentAnalyzer()
-    return detector, healer, agent, forensics, peer_engine, indexer, store, rag_engine, sentiment_analyzer
+    return detector, healer, agent, forensics, peer_engine, indexer, store
 
-detector, healer, agent, forensics, peer_engine, indexer, store, rag_engine, sentiment_analyzer = get_engines(
+detector, healer, agent, forensics, peer_engine, indexer, store = get_engines(
     relative_tolerance, margin_tolerance, enable_live_market
 )
 
@@ -413,13 +410,13 @@ st.markdown(
     "audit temporal basis slips & peer comparisons, and generate institutional research reports."
 )
 
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
-    "🔍 Hallucination Detector",
+tab1, tab2, tab3, tab4, tab5 = st.tabs([
+    "🔍 Hallucination Detector & Healer",
     "📊 AI Research Agent",
     "💬 Finance Chat Q&A",
     "⚖️ Peer Benchmarking",
     "🔬 Quantitative Forensics",
-    "📑 Document Ingestion",
+    "📑 Document & PDF Ingestion"
 ])
 
 # ══════════════════════════════════════════════════════════════
@@ -1589,3 +1586,156 @@ with tab6:
             st.dataframe(pd.DataFrame(rows), use_container_width=True)
         else:
             st.info("Text indexed into context chunks. No exact tabular statement line patterns matched.")
+
+
+# ── TAB 6: CLAIM-LEVEL NLI AUDIT ────────────────────────────
+with tab6:
+    st.subheader("Claim-level financial verification")
+    st.caption(
+        "Splits an LLM answer into claims, retrieves local financial evidence with TF-IDF, "
+        "and checks each evidence/claim pair with DeBERTa-v3-small NLI, entity rules, and numerical comparisons."
+    )
+    nli_question = st.text_input(
+        "Financial question",
+        value=selected_preset["question"],
+        key="claim_nli_question",
+    )
+    nli_answer = st.text_area(
+        "LLM-generated answer",
+        value=selected_preset["answer"],
+        height=120,
+        key="claim_nli_answer",
+    )
+    nli_company = st.selectbox(
+        "Evidence company (optional)",
+        ["Auto-detect"] + ALL_COMPANIES,
+        key="claim_nli_company",
+    )
+    local_corpus_path = st.text_input(
+        "Optional local evidence folder or file path",
+        value="",
+        help="Indexes local PDFs, text, CSV, JSON, or JSONL without uploading them to a service.",
+        key="claim_nli_local_path",
+    )
+    financebench_path = st.text_input(
+        "Optional local FinanceBench JSON/JSONL/CSV path",
+        value="",
+        key="claim_nli_financebench_path",
+    )
+    uploaded_pdfs = st.file_uploader(
+        "Add financial PDFs as local evidence",
+        type=["pdf"],
+        accept_multiple_files=True,
+        key="claim_nli_pdf_uploads",
+    )
+    st.caption(
+        "The first audit downloads the configured NLI checkpoint if it is not cached; "
+        "inference runs locally on CPU. Only evidence present in the filing store or selected local documents is used."
+    )
+
+    if st.button("Verify claims against financial evidence", type="primary", key="claim_nli_run"):
+        if not nli_answer.strip():
+            st.warning("Enter an LLM-generated answer to verify.")
+        else:
+            active_retriever = FinancialEvidenceRetriever(report_store=store)
+            if local_corpus_path.strip():
+                active_retriever.load_path(local_corpus_path.strip())
+            if financebench_path.strip():
+                active_retriever.load_financebench(financebench_path.strip())
+            for uploaded_pdf in uploaded_pdfs or []:
+                active_retriever.add_pdf_bytes(
+                    uploaded_pdf.getvalue(),
+                    uploaded_pdf.name,
+                )
+            active_verifier = FinancialClaimVerifier(
+                report_store=store,
+                retriever=active_retriever,
+                nli_classifier=claim_verifier.nli_classifier,
+            )
+            with st.spinner("Extracting claims, retrieving evidence, and running local DeBERTa NLI..."):
+                nli_report = active_verifier.verify(
+                    question=nli_question,
+                    answer=nli_answer,
+                    company=None if nli_company == "Auto-detect" else nli_company,
+                )
+            st.caption(
+                f"Model: `{nli_report.model_name}` | Local evidence passages: {active_retriever.passage_count}"
+            )
+            if not nli_report.claims:
+                st.info("No financial claims or entities were identified in the answer.")
+            for claim_number, claim_result in enumerate(nli_report.claims, start=1):
+                with st.expander(
+                    f"{claim_number}. {claim_result.status}: {claim_result.claim.original_text}",
+                    expanded=True,
+                ):
+                    st.markdown(f"**Original claim:** {claim_result.claim.original_text}")
+                    if claim_result.evidence:
+                        evidence = claim_result.evidence[0]
+                        st.markdown(f"**Supporting evidence:** {evidence.text}")
+                        st.caption(
+                            f"Source: {evidence.source} | TF-IDF relevance: {evidence.relevance:.3f}"
+                        )
+                    else:
+                        st.info("No relevant evidence retrieved. Unsupported does not mean proven false.")
+                    prob_col1, prob_col2, prob_col3 = st.columns(3)
+                    prob_col1.metric(
+                        "Entailment",
+                        f"{claim_result.entailment_probability:.1%}"
+                        if claim_result.entailment_probability is not None else "N/A",
+                    )
+                    prob_col2.metric(
+                        "Contradiction",
+                        f"{claim_result.contradiction_probability:.1%}"
+                        if claim_result.contradiction_probability is not None else "N/A",
+                    )
+                    prob_col3.metric(
+                        "Neutral",
+                        f"{claim_result.neutral_probability:.1%}"
+                        if claim_result.neutral_probability is not None else "N/A",
+                    )
+                    st.markdown(
+                        "**Claim entities:** "
+                        + (", ".join(
+                            f"{entity.text} ({entity.label})"
+                            for entity in claim_result.claim.entities
+                        ) or "None detected")
+                    )
+                    st.markdown(
+                        "**Evidence entities:** "
+                        + (", ".join(
+                            f"{entity.text} ({entity.label})"
+                            for entity in claim_result.evidence_entities
+                        ) or "None detected")
+                    )
+                    st.markdown(
+                        f"**Entity substitution detected:** {'Yes' if claim_result.entity_mismatch else 'No'}"
+                    )
+                    st.markdown(
+                        "**Extracted claim values:** "
+                        + (", ".join(
+                            f"{value.raw} ({value.metric or 'unclassified metric'})"
+                            for value in claim_result.claim.values
+                        ) or "None detected")
+                    )
+                    st.markdown(
+                        "**Extracted evidence values:** "
+                        + (", ".join(
+                            f"{value.raw} ({value.metric or 'unclassified metric'})"
+                            for value in claim_result.evidence_values
+                        ) or "None detected")
+                    )
+                    if claim_result.numerical_comparisons:
+                        st.markdown("**Numerical consistency:**")
+                        st.dataframe(pd.DataFrame([
+                            {
+                                "Status": item.status,
+                                "Claim value": item.claim_value,
+                                "Evidence value": item.evidence_value,
+                                "Absolute discrepancy": item.absolute_discrepancy,
+                                "Percentage discrepancy": item.percentage_discrepancy,
+                                "Explanation": item.explanation,
+                            }
+                            for item in claim_result.numerical_comparisons
+                        ]), use_container_width=True)
+                    st.markdown(f"**Final status: {claim_result.status}**")
+                    st.write(claim_result.explanation)
